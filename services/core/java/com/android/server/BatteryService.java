@@ -1090,7 +1090,21 @@ public final class BatteryService extends SystemService {
                 mHealthInfo.maxChargingVoltageMicrovolts);
         intent.putExtra(BatteryManager.EXTRA_CHARGE_COUNTER, mHealthInfo.batteryChargeCounterUah);
         intent.putExtra(BatteryManager.EXTRA_CYCLE_COUNT, mHealthInfo.batteryCycleCount);
-        intent.putExtra(BatteryManager.EXTRA_CHARGING_STATUS, mHealthInfo.chargingState);
+        // NX809J: surface the charge-limit ("battery defender") state to SystemUI so the
+        // status-bar battery icon reflects it. The LineageOS Charging Control HAL holds the
+        // limit by disabling charging at the sysfs node, which makes the gauge report
+        // DISCHARGING while a charger is still connected (this charger drains the load rather
+        // than reporting NOT_CHARGING, and the vendor health HAL leaves chargingState INVALID).
+        // When we're plugged in yet discharging, report CHARGING_POLICY_ADAPTIVE_LONGLIFE so
+        // BatteryControllerImpl.isBatteryDefenderMode() trips and the defend icon shows.
+        int chargingStatus = mHealthInfo.chargingState;
+        final boolean chargerOnline = mHealthInfo.chargerAcOnline || mHealthInfo.chargerUsbOnline
+                || mHealthInfo.chargerWirelessOnline || mHealthInfo.chargerDockOnline;
+        if (chargerOnline
+                && mHealthInfo.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING) {
+            chargingStatus = BatteryManager.CHARGING_POLICY_ADAPTIVE_LONGLIFE;
+        }
+        intent.putExtra(BatteryManager.EXTRA_CHARGING_STATUS, chargingStatus);
         intent.putExtra(BatteryManager.EXTRA_CAPACITY_LEVEL, mHealthInfo.batteryCapacityLevel);
         intent.putExtra(BatteryManager.EXTRA_MAXIMUM_CAPACITY, mHealthInfo.batteryFullChargeUah);
         intent.putExtra(
