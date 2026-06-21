@@ -89,7 +89,7 @@ class AppIdAppFunctionAccessPolicy : SchemePolicy() {
     ): Int {
         val targetUid = UserHandle.getUid(targetUserId, targetAppId)
         return state.userStates[agentUserId]
-            ?.appIdAppFunctionAccessFlags[agentAppId]
+            ?.appIdAppFunctionAccessFlags?.get(agentAppId)
             ?.get(targetUid) ?: 0
     }
 
@@ -121,7 +121,7 @@ class AppIdAppFunctionAccessPolicy : SchemePolicy() {
         }
 
         val existingAgentState =
-            newState.userStates[agentUserId]?.appIdAppFunctionAccessFlags[agentAppId]
+            newState.userStates[agentUserId]?.appIdAppFunctionAccessFlags?.get(agentAppId)
         val oldFlags = existingAgentState?.get(targetUid) ?: 0
         val newFlags = (oldFlags andInv flagMask) or (flags and flagMask)
         if (oldFlags == newFlags) {

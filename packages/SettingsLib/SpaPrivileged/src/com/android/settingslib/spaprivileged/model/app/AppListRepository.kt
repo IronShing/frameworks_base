@@ -272,7 +272,8 @@ class AppListRepositoryImpl(context: Context, private val featureFlags: FeatureF
         key: K,
         block: suspend () -> V,
     ): Deferred<V> = coroutineScope {
-        cache.computeIfAbsent(key) { this@coroutineScope.async { block() } }
+        @Suppress("UNCHECKED_CAST")
+        cache.computeIfAbsent(key!!) { this@coroutineScope.async { block() } }
     }
 
     override suspend fun loadApps(

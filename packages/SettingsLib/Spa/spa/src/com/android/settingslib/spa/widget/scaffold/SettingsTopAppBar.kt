@@ -48,17 +48,14 @@ private fun NavigationIcon(isFirstLayerPageWhenEmbedded: Boolean) {
 
 /** Whether the current page should show the navigate back button. */
 @Composable
-private fun shouldShowNavigateBack(isFirstLayerPageWhenEmbedded: Boolean): Boolean =
-    when {
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU -> true
-        !isFirstLayerPageWhenEmbedded -> true
-        else -> {
-            val activity = localActivity() ?: return true
-            remember(activity) {
-                !ActivityEmbeddingController.getInstance(activity).isActivityEmbedded(activity)
-            }
-        }
+private fun shouldShowNavigateBack(isFirstLayerPageWhenEmbedded: Boolean): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+    if (!isFirstLayerPageWhenEmbedded) return true
+    val activity = localActivity() ?: return true
+    return remember(activity) {
+        !ActivityEmbeddingController.getInstance(activity).isActivityEmbedded(activity)
     }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun TopAppBarScrollBehavior.collapse() {

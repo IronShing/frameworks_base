@@ -23,7 +23,12 @@ import androidx.dynamicanimation.animation.SpringForce
 import com.android.internal.annotations.VisibleForTesting
 import com.android.wm.shell.shared.animation.PhysicsAnimator
 
+/** Desk switch transition system properties group. */
+@VisibleForTesting
+const val SYSTEM_PROPERTIES_GROUP = "persist.wm.debug.desktop_transitions.desk_switch"
+
 object DeskSwitchAnimationUtils {
+
     /** The percentage of the screen that tasks will slide before/after fading. */
     const val LATERAL_MOTION_SCREEN_PCT = 0.25f
 
@@ -75,10 +80,6 @@ object DeskSwitchAnimationUtils {
     /** Whether debug logs are enabled. */
     val DEBUG_ANIMATION =
         SystemProperties.getBoolean("$SYSTEM_PROPERTIES_GROUP.debug_animation_steps", false)
-
-    /** Desk switch transition system properties group. */
-    @VisibleForTesting
-    const val SYSTEM_PROPERTIES_GROUP = "persist.wm.debug.desktop_transitions.desk_switch"
 
     /**
      * Desk switch transition system property value with [name].
