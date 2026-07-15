@@ -63,7 +63,33 @@ class DefaultHalFactory implements HalFactory {
                                 + "/default";
                 if (ServiceManager.isDeclared(aidlServiceName)) {
                     Slog.i(TAG, "Connecting to default soundtrigger3.ISoundTriggerHw");
-                    return new SoundTriggerHw3Compat(ServiceManager.waitForService(aidlServiceName),
+                    // NX809J: on this source-vendor build the QTI ST HAL
+                    // (libsoundtriggerhal.qti.so, registered by the stock audiohalservice.qti)
+                    // is never loaded -- the AOSP default audio-core HAL is used instead -- so
+                    // soundtrigger3 is declared in VINTF but implemented by nobody. The stock
+                    // waitForService() then blocks system_server's main thread forever ->
+                    // Watchdog kills system_server -> boot loop. Bound the wait; if the HAL never
+                    // registers, throw so SoundTriggerMiddlewareImpl skips this module
+                    // (SoundTrigger/hotword unavailable) and boot proceeds. Reverts to real
+                    // behaviour automatically once the QTI audio HAL registers sthal.
+                    android.os.IBinder binder = null;
+                    for (int i = 0; i < 50; i++) {   // ~5s bounded wait
+                        binder = ServiceManager.checkService(aidlServiceName);
+                        if (binder != null) {
+                            break;
+                        }
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    if (binder == null) {
+                        throw new RuntimeException("NX809J: soundtrigger3.ISoundTriggerHw/default "
+                                + "declared but not registered; skipping SoundTrigger module");
+                    }
+                    return new SoundTriggerHw3Compat(binder,
                             () -> {
                                 // This property needs to be defined in an init.rc script and
                                 // trigger a HAL reboot.
