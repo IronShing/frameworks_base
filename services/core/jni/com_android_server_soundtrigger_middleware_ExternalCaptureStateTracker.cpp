@@ -72,7 +72,13 @@ void connect(JNIEnv* env, jobject obj) {
     sp<AudioSystem::CaptureStateListener> listener(new Listener(env, obj));
     status_t status =
         AudioSystem::registerSoundTriggerCaptureStateListener(listener);
-    LOG_ALWAYS_FATAL_IF(status != NO_ERROR);
+    // NX809J: the vendor audio DSP (ADSP APM/AGM) never comes up on this source-vendor,
+    // so AudioPolicyService is dead and this registration fails. Aborting here kills
+    // system_server -> boot loop. Degrade instead of crashing (no SoundTrigger capture
+    // tracking; the Java run() loop then just blocks on its semaphore). Boot proceeds.
+    ALOGE_IF(status != NO_ERROR,
+             "NX809J: registerSoundTriggerCaptureStateListener failed (%d); continuing "
+             "without SoundTrigger capture-state tracking (audio DSP unavailable)", status);
 }
 
 const JNINativeMethod gMethods[] = {
