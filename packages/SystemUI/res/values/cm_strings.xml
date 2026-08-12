@@ -73,6 +73,11 @@
     <string name="accessibility_quick_settings_heads_up_off">Heads up off.</string>
     <string name="accessibility_quick_settings_heads_up_on">Heads up on.</string>
 
+    <!-- QuickSettings: WiFi low latency tile [CHAR LIMIT=NONE] -->
+    <string name="quick_settings_wifi_low_latency_label">WiFi low latency</string>
+    <string name="accessibility_quick_settings_wifi_low_latency_off">WiFi low latency off.</string>
+    <string name="accessibility_quick_settings_wifi_low_latency_on">WiFi low latency on.</string>
+
     <!-- PowerShare QS tile -->
     <string name="quick_settings_powershare_label">Wireless PowerShare</string>
     <string name="quick_settings_powershare_off_powersave_label">Wireless PowerShare off\nBattery saver</string>

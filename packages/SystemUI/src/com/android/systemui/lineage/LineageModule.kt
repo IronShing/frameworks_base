@@ -32,6 +32,7 @@ import com.android.systemui.qs.tiles.HeadsUpTile
 import com.android.systemui.qs.tiles.LocaleTile
 import com.android.systemui.qs.tiles.OnTheGoTile
 import com.android.systemui.qs.tiles.PowerShareTile
+import com.android.systemui.qs.tiles.WifiLowLatencyTile
 import com.android.systemui.qs.tiles.PreferredNetworkTile
 import com.android.systemui.qs.tiles.ProfilesTile
 import com.android.systemui.qs.tiles.ReadingModeTile
@@ -112,6 +113,12 @@ interface LineageModule {
     @IntoMap
     @StringKey(HeadsUpTile.TILE_SPEC)
     fun bindHeadsUpTile(headsUpTile: HeadsUpTile): QSTileImpl<*>
+
+    /** Inject WifiLowLatencyTile into tileMap in QSModule */
+    @Binds
+    @IntoMap
+    @StringKey(WifiLowLatencyTile.TILE_SPEC)
+    fun bindWifiLowLatencyTile(wifiLowLatencyTile: WifiLowLatencyTile): QSTileImpl<*>
 
     /** Inject LocaleTile into tileMap in QSModule */
     @Binds
@@ -231,6 +238,7 @@ interface LineageModule {
         const val DATA_SWITCH_TILE_SPEC = "dataswitch"
         const val FPS_INFO_TILE_SPEC = "fpsinfo"
         const val HEADS_UP_TILE_SPEC = "heads_up"
+        const val WIFI_LOW_LATENCY_TILE_SPEC = "wifi_low_latency"
         const val LOCALE_TILE_SPEC = "locale"
         const val POWERSHARE_TILE_SPEC = "powershare"
         const val PREFERRED_NETWORK_TILE_SPEC = "preferred_network"
@@ -306,6 +314,21 @@ interface LineageModule {
                     ),
                 instanceId = uiEventLogger.getNewInstanceId(),
                 category = TileCategory.ACCESSIBILITY,
+            )
+
+        @Provides
+        @IntoMap
+        @StringKey(WIFI_LOW_LATENCY_TILE_SPEC)
+        fun provideWifiLowLatencyTileConfig(uiEventLogger: QsEventLogger): QSTileConfig =
+            QSTileConfig(
+                tileSpec = TileSpec.create(WIFI_LOW_LATENCY_TILE_SPEC),
+                uiConfig =
+                    QSTileUIConfig.Resource(
+                        iconRes = R.drawable.ic_qs_wifi_low_latency,
+                        labelRes = R.string.quick_settings_wifi_low_latency_label
+                    ),
+                instanceId = uiEventLogger.getNewInstanceId(),
+                category = TileCategory.CONNECTIVITY,
             )
 
         @Provides

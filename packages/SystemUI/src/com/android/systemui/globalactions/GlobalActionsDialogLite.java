@@ -1011,7 +1011,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
     @VisibleForTesting
     boolean shouldDisplayBugReport(@Nullable UserInfo user) {
-        return false;
+        return user != null && user.isAdmin()
+                && mSecureSettings.getInt(Settings.Secure.BUGREPORT_IN_POWER_MENU, 0) != 0;
     }
 
     @Override

@@ -115,8 +115,12 @@ public class AutoAODService extends SystemService {
             Slog.v(TAG, "onTwilightStateChanged state: " + state);
             if (state == null) return;
             mTwilightState = state;
-            if (mMode < MODE_MIXED_SUNSET) mHandler.post(() -> maybeActivateNight(false));
-            else mHandler.post(() -> maybeActivateTime(false));
+            // Apply the freshly-delivered twilight state immediately (setActive=true) so
+            // DOZE_ALWAYS_ON is updated now. Previously this passed false, which only
+            // rescheduled the alarm, so a live schedule change didn't take effect until the
+            // next sunset/sunrise alarm or a reboot.
+            if (mMode < MODE_MIXED_SUNSET) mHandler.post(() -> maybeActivateNight(true));
+            else mHandler.post(() -> maybeActivateTime(true));
         }
     };
 
@@ -341,7 +345,7 @@ public class AutoAODService extends SystemService {
         if (mTimeRegistered) setTimeReciever(false);
         if (mTwilightRegistered) setTwilightListener(false);
         // erase shared preferences
-        if (!boot) mSharedPreferences.edit().remove(PREF_TIME_KEY).apply();
+        if (!boot && mSharedPreferences != null) mSharedPreferences.edit().remove(PREF_TIME_KEY).apply();
         switch (mMode) {
             default:
             case MODE_DISABLED:
@@ -478,7 +482,7 @@ public class AutoAODService extends SystemService {
             mOverrideOnce = false;
             return;
         }
-        mSharedPreferences.edit().remove(PREF_TIME_KEY).apply();
+        if (mSharedPreferences != null) mSharedPreferences.edit().remove(PREF_TIME_KEY).apply();
 
         if (mActive == active) return;
         mActive = active;
