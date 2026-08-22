@@ -86,18 +86,17 @@ class DefaultBlurChoreographer(
     private val newFrameCallback =
         Choreographer.FrameCallback {
             wasUpdateScheduledForThisFrame = false
+            val blurEffect = lastScheduledBlurEffect
+            val blurRadius = blurEffect.radius.toInt()
+            blurUtils.prepareBlur(blurRadius)
             blurUtils.applyBlur(
                 rootView.viewRootImpl,
-                lastScheduledBlurEffect.radius.toInt(),
+                blurRadius,
                 false,
-                lastScheduledBlurEffect.scale,
+                blurEffect.scale,
             )
-            TrackTracer.instantForGroup(
-                traceTag,
-                "appliedBlurRadius",
-                lastScheduledBlurEffect.radius.toInt(),
-            )
-            blurAppliedListener?.invoke(lastScheduledBlurEffect)
+            TrackTracer.instantForGroup(traceTag, "appliedBlurRadius", blurRadius)
+            blurAppliedListener?.invoke(blurEffect)
         }
 
     @MainThread
@@ -123,7 +122,6 @@ class DefaultBlurChoreographer(
         TrackTracer.instantForGroup(traceTag, "preparedBlurRadius", newBlurRadius)
         lastScheduledBlurEffect = blurEffect
         wasUpdateScheduledForThisFrame = true
-        blurUtils.prepareBlur(newBlurRadius)
         choreographer.postFrameCallback(newFrameCallback)
     }
 

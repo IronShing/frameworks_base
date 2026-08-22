@@ -20,6 +20,8 @@ package com.android.systemui.keyguard.ui.viewmodel
 import android.content.Context
 import com.android.settingslib.Utils
 import com.android.systemui.Flags.enableLockscreenBlur
+import com.android.systemui.biometrics.AuthController
+import com.android.systemui.biometrics.isUdfpsFingerDownFlow
 import com.android.systemui.common.shared.colors.SurfaceEffectColors
 import com.android.systemui.common.ui.domain.interactor.ConfigurationInteractor
 import com.android.systemui.dagger.SysUISingleton
@@ -34,11 +36,13 @@ import dagger.Lazy
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.scan
 
 /** Models the UI state for the device entry icon background view. */
 @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
@@ -80,6 +84,7 @@ constructor(
     toDozingEndStateTransitionViewModel: ToDozingEndStateTransitionViewModel,
     windowRootViewBlurInteractor: WindowRootViewBlurInteractor,
     private val sceneInteractor: Lazy<SceneInteractor>,
+    authController: AuthController,
 ) {
     val color: Flow<Int> =
         deviceEntryIconViewModel.useBackgroundProtection.flatMapLatest { useBackground ->
@@ -118,7 +123,7 @@ constructor(
                 flowOf(0)
             }
         }
-    val alpha: Flow<Float> =
+    private val rawAlpha: Flow<Float> =
         deviceEntryIconViewModel.useBackgroundProtection.flatMapLatest { useBackground ->
             if (useBackground) {
                 setOf(
@@ -165,6 +170,15 @@ constructor(
                 flowOf(0f)
             }
         }
+
+    val alpha: Flow<Float> =
+        combine(rawAlpha, authController.isUdfpsFingerDownFlow()) { newAlpha, isFingerDown ->
+                newAlpha to isFingerDown
+            }
+            .scan<Pair<Float, Boolean>, Float?>(null) { previousAlpha, (newAlpha, isFingerDown) ->
+                if (previousAlpha != null && isFingerDown) previousAlpha else newAlpha
+            }
+            .filterNotNull()
 
     private fun calculateDeviceEntryIconBackgroundAlpha(state: KeyguardState): Float {
         return when (state) {

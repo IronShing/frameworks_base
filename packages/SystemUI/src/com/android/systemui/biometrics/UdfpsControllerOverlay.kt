@@ -499,13 +499,17 @@ constructor(
     fun hide(): Boolean {
         val wasShowing = isShowing
         Log.d(TAG, "hideUdfpsControllerOverlay wasShowing=$wasShowing")
+        var displayWasConfigured = false
         overlayTouchView?.apply {
             if (isDisplayConfigured) {
+                displayWasConfigured = true
                 unconfigureDisplay()
             }
         }
         udfpsOverlayInteractor.stopHandlingTouches()
-        udfpsDisplayModeProvider.disable(null)
+        if (!displayWasConfigured) {
+            udfpsDisplayModeProvider.disable(null)
+        }
         udfpsHelper?.removeDimLayer()
         getTouchOverlay()?.apply {
             if (this.parent != null) {
