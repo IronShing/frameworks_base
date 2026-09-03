@@ -111,6 +111,7 @@ import android.os.IBinder;
 import android.os.ParcelableException;
 import android.os.PatternMatcher;
 import android.os.Process;
+import android.os.SystemProperties;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -575,6 +576,22 @@ public class ComputerEngine implements Computer {
     private static final int SPOOF_INSTALL_USER = 1;
     private static final int SPOOF_INSTALL_SYSTEM = 2;
     private static final String VENDING_PACKAGE = "com.android.vending";
+
+    // NX809J: Android Auto only lists third-party car apps (Fermata Auto, CarStream, ...) whose
+    // install source is Play unless its hidden developer "Unknown sources" toggle is on. Report
+    // Play as the installer of everything when the CALLER is gearhead. Nobody else sees this.
+    // Idea from sn-00-x "Fake InstallSource" (GrapheneOS A14), reimplemented without gmscompat.
+    private static final String GEARHEAD_PACKAGE = "com.google.android.projection.gearhead";
+    private static final String PROP_AA_FAKE_INSTALL_SOURCE = "persist.sys.aa_fake_installsource";
+
+    private boolean isAndroidAutoCaller(int callingUid) {
+        if (!isSystemReady()) return false;
+        if (!SystemProperties.getBoolean(PROP_AA_FAKE_INSTALL_SOURCE, true)) return false;
+        if (UserHandle.getAppId(callingUid) < Process.FIRST_APPLICATION_UID) return false;
+        if (Process.isIsolated(callingUid) || Process.isSdkSandboxUid(callingUid)) return false;
+        final String[] pkgs = getPackagesForUid(callingUid);
+        return pkgs != null && pkgs.length == 1 && GEARHEAD_PACKAGE.equals(pkgs[0]);
+    }
 
     private int shouldSpoofInstallSource(int callingUid, String targetPackage, int targetUserId) {
         if (!isSystemReady() || targetPackage == null) {
@@ -5539,6 +5556,13 @@ public class ComputerEngine implements Computer {
         final int callingUid = Binder.getCallingUid();
         enforceCrossUserPermission(callingUid, userId, false /* requireFullPermission */,
                 false /* checkShell */, "getInstallSourceInfo");
+
+        if (isAndroidAutoCaller(callingUid)) {
+            return new InstallSourceInfo(
+                    VENDING_PACKAGE, null, VENDING_PACKAGE,
+                    VENDING_PACKAGE, VENDING_PACKAGE,
+                    android.content.pm.PackageInstaller.PACKAGE_SOURCE_STORE);
+        }
 
         int spoofResult = shouldSpoofInstallSource(callingUid, packageName, userId);
         if (spoofResult == SPOOF_INSTALL_USER) {

@@ -387,6 +387,10 @@
     <string name="config_navBarLayout" translatable="false">left[.5W],back[1WC];home;recent[1WC],right[.5W]</string>
     <string name="config_navBarLayoutQuickstep" translatable="false">back[1.7WC];home;contextual[1.7WC]</string>
     <string name="config_navBarLayoutHandle" translatable="false">back[70AC];home_handle;ime_switcher[70AC]</string>
+    <!-- Gesture-nav layouts selected by Settings.Secure sysui_nav_bar_ime_back_position:
+         the IME "dismiss keyboard" chevron (back-alt) on the right end, or on both ends. -->
+    <string name="config_navBarLayoutHandleImeRight" translatable="false">ime_switcher[70AC];home_handle;back[70AC]</string>
+    <string name="config_navBarLayoutHandleImeBoth" translatable="false">back[70AC];home_handle;ime_switcher[70AC],back[70AC]</string>
 
     <!-- Whether to show a warning notification when device's skin temperature is high. -->
     <integer name="config_showTemperatureWarning">0</integer>

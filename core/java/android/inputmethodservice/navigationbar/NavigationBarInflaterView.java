@@ -21,6 +21,10 @@ import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
 import android.inputmethodservice.navigationbar.ReverseLinearLayout.ReverseRelativeLayout;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -74,6 +78,30 @@ public final class NavigationBarInflaterView extends FrameLayout {
     // Copied from "config_navBarLayoutHandle:
     private static final String CONFIG_NAV_BAR_LAYOUT_HANDLE =
             "back[70AC];home_handle;ime_switcher[70AC]";
+    // Same layout with the back (hide keyboard) button on the end side instead.
+    private static final String CONFIG_NAV_BAR_LAYOUT_HANDLE_IME_RIGHT =
+            "ime_switcher[70AC];home_handle;back[70AC]";
+    // Same layout with a back (hide keyboard) button on both sides.
+    private static final String CONFIG_NAV_BAR_LAYOUT_HANDLE_IME_BOTH =
+            "back[70AC];home_handle;ime_switcher[70AC],back[70AC]";
+
+    /**
+     * Secure setting choosing where the IME "hide keyboard" back button is drawn in gesture
+     * navigation. Shared with SystemUI's NavigationBarInflaterView and the Settings toggle.
+     */
+    public static final String NAV_BAR_IME_BACK_POSITION = "sysui_nav_bar_ime_back_position";
+    public static final int IME_BACK_POSITION_LEFT = 0;
+    public static final int IME_BACK_POSITION_RIGHT = 1;
+    public static final int IME_BACK_POSITION_BOTH = 2;
+
+    private String mCurrentLayout;
+    private final ContentObserver mImeBackPositionObserver =
+            new ContentObserver(new Handler(Looper.getMainLooper())) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    onLikelyDefaultLayoutChange();
+                }
+            };
 
     protected LayoutInflater mLayoutInflater;
     protected LayoutInflater mLandscapeInflater;
@@ -118,7 +146,45 @@ public final class NavigationBarInflaterView extends FrameLayout {
     }
 
     String getDefaultLayout() {
-        return CONFIG_NAV_BAR_LAYOUT_HANDLE;
+        // Runs in the IME's process: plain (calling-user) reads only, no cross-user access.
+        final int position = Settings.Secure.getInt(mContext.getContentResolver(),
+                NAV_BAR_IME_BACK_POSITION, IME_BACK_POSITION_LEFT);
+        switch (position) {
+            case IME_BACK_POSITION_RIGHT:
+                return CONFIG_NAV_BAR_LAYOUT_HANDLE_IME_RIGHT;
+            case IME_BACK_POSITION_BOTH:
+                return CONFIG_NAV_BAR_LAYOUT_HANDLE_IME_BOTH;
+            default:
+                return CONFIG_NAV_BAR_LAYOUT_HANDLE;
+        }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(NAV_BAR_IME_BACK_POSITION),
+                false /* notifyForDescendants */, mImeBackPositionObserver);
+        // The setting may have changed while we were detached.
+        onLikelyDefaultLayoutChange();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        mContext.getContentResolver().unregisterContentObserver(mImeBackPositionObserver);
+        super.onDetachedFromWindow();
+    }
+
+    /** Re-inflates the buttons if the default layout no longer matches what is inflated. */
+    private void onLikelyDefaultLayoutChange() {
+        final String newLayout = getDefaultLayout();
+        if (newLayout.equals(mCurrentLayout)) {
+            return;
+        }
+        clearViews();
+        mLastPortrait = null;
+        mLastLandscape = null;
+        inflateLayout(newLayout);
     }
 
     void setButtonDispatchers(SparseArray<ButtonDispatcher> buttonDispatchers) {
@@ -190,6 +256,7 @@ public final class NavigationBarInflaterView extends FrameLayout {
             newLayout = getDefaultLayout();
             sets = newLayout.split(GRAVITY_SEPARATOR, 3);
         }
+        mCurrentLayout = newLayout;
         String[] start = sets[0].split(BUTTON_SEPARATOR);
         String[] center = sets[1].split(BUTTON_SEPARATOR);
         String[] end = sets[2].split(BUTTON_SEPARATOR);
