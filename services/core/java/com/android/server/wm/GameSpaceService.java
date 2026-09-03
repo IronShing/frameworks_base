@@ -125,6 +125,13 @@ public final class GameSpaceService extends SystemService {
                 mGameStateDispatcher.boostGame(mGameListManager.isGameInPerfMode(mCurrentGame));
             }
         }));
+        // Normalise the boost state on every boot. persist.sys.power_mode_perf survives
+        // reboots, so if we were killed mid-game (crash, force-stop, flat battery) it comes
+        // back as 1 with no game running. The vendor init trigger that lowers the GPU floor
+        // only fires on a CHANGE to 0, so a stale 1 would pin the GPU at the game profile
+        // floor indefinitely -- and the next real game launch would set 1 over 1, produce no
+        // change, and silently fail to boost. Clearing here makes property and hardware agree.
+        mGameStateDispatcher.boostGame(false);
         Slog.i(TAG, "GameSpaceService initialized");
     }
 

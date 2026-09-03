@@ -23,6 +23,8 @@ import android.annotation.Nullable;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.drawable.Icon;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
@@ -55,6 +57,11 @@ public class NavigationBarInflaterView extends FrameLayout {
     public static final String NAV_BAR_VIEWS = "sysui_nav_bar";
     public static final String NAV_BAR_LEFT = "sysui_nav_bar_left";
     public static final String NAV_BAR_RIGHT = "sysui_nav_bar_right";
+    /** Settings.Secure: where the gesture-nav IME back (dismiss keyboard) chevron sits. */
+    public static final String NAV_BAR_IME_BACK_POSITION = "sysui_nav_bar_ime_back_position";
+    public static final int IME_BACK_POSITION_LEFT = 0;
+    public static final int IME_BACK_POSITION_RIGHT = 1;
+    public static final int IME_BACK_POSITION_BOTH = 2;
 
     public static final String MENU_IME_ROTATE = "menu_ime";
     public static final String BACK = "back";
@@ -158,11 +165,25 @@ public class NavigationBarInflaterView extends FrameLayout {
 
     protected String getDefaultLayout() {
         final int defaultResource = QuickStepContract.isGesturalMode(mNavBarMode)
-                ? R.string.config_navBarLayoutHandle
+                ? getGesturalLayoutResource()
                 : mLauncherProxyService.shouldShowSwipeUpUI()
                         ? R.string.config_navBarLayoutQuickstep
                         : R.string.config_navBarLayout;
         return getContext().getString(defaultResource);
+    }
+
+    /** Gesture-nav layout honouring the user's IME back-chevron position (left/right/both). */
+    private int getGesturalLayoutResource() {
+        final int position = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                NAV_BAR_IME_BACK_POSITION, IME_BACK_POSITION_LEFT, UserHandle.USER_CURRENT);
+        switch (position) {
+            case IME_BACK_POSITION_RIGHT:
+                return R.string.config_navBarLayoutHandleImeRight;
+            case IME_BACK_POSITION_BOTH:
+                return R.string.config_navBarLayoutHandleImeBoth;
+            default:
+                return R.string.config_navBarLayoutHandle;
+        }
     }
 
     private void onNavigationModeChanged(int mode) {

@@ -92,6 +92,7 @@ import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.view.ViewTreeObserver.InternalInsetsInfo;
 import android.view.ViewTreeObserver.OnComputeInternalInsetsListener;
@@ -663,7 +664,8 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                 if (mView != null) {
                     mView.setNavBarMode(mNavBarMode, mNavigationModeController.getImeDrawsImeNavBar()
                             && getShowNavBarIme());
-
+                    // Re-inflate if the IME back-chevron position changed (no-op otherwise).
+                    mView.updateStates();
                 }
             }
         };
@@ -849,6 +851,12 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
 
         mContext.getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor("sysui_show_nav_bar_ime"),
+                false,
+                mNavBarObserver,
+                UserHandle.USER_ALL
+        );
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(NavigationBarInflaterView.NAV_BAR_IME_BACK_POSITION),
                 false,
                 mNavBarObserver,
                 UserHandle.USER_ALL
@@ -1807,17 +1815,40 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         if (button == null) {
             return;
         }
-        View view = button.getCurrentView();
-        if (view == null || !button.isVisible()) {
+        View current = button.getCurrentView();
+        if (current == null || !button.isVisible()) {
             return;
         }
-        // If the button is tappable from perspective of NearestTouchFrame, then we'll
-        // include the regions where the tap is valid instead of just the button layout location
-        if (useNearestRegion && touchRegionCache.containsKey(view)) {
-            region.op(touchRegionCache.get(view), Region.Op.UNION);
-            return;
+        // A button may be laid out more than once in the current orientation (e.g. the IME
+        // back chevron on both ends), so cover every instance, not just the first.
+        final View currentNavView = mView.getCurrentView();
+        for (View view : button.getViews()) {
+            if (view != current && !isDescendantOf(view, currentNavView)) {
+                continue;
+            }
+            // If the button is tappable from perspective of NearestTouchFrame, then we'll
+            // include the regions where the tap is valid instead of just the button layout
+            // location
+            if (useNearestRegion && touchRegionCache.containsKey(view)) {
+                region.op(touchRegionCache.get(view), Region.Op.UNION);
+                continue;
+            }
+            updateButtonLocation(region, view, inScreenSpace);
         }
-        updateButtonLocation(region, view, inScreenSpace);
+    }
+
+    private static boolean isDescendantOf(View view, View ancestor) {
+        if (ancestor == null) {
+            return false;
+        }
+        ViewParent parent = view.getParent();
+        while (parent != null) {
+            if (parent == ancestor) {
+                return true;
+            }
+            parent = parent.getParent();
+        }
+        return false;
     }
 
     private void updateButtonLocation(Region region, View view, boolean inScreenSpace) {
