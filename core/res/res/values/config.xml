@@ -6064,6 +6064,12 @@
          config_externalDisplayPeakRefreshRate and config_externalDisplayPeakWidth are non-zero. -->
     <integer name="config_externalDisplayPeakHeight">0</integer>
 
+    <!-- Base (default) density for an external display expressed at 1080p, scaled by the
+         display's shorter dimension (1080p -> this value, 1440p -> x1.33, 2160p -> x2). Applied
+         as a floor over the physical-size based density (10.4 mm touch target), which makes the
+         UI tiny on large monitors. 0 keeps the physical-size density only. -->
+    <integer name="config_externalDisplayBaseDensityAt1080p">0</integer>
+
     <!-- Enable synchronization of the displays refresh rates by applying the default low refresh
          rate. -->
     <bool name="config_refreshRateSynchronizationEnabled">false</bool>

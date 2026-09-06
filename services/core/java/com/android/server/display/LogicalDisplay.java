@@ -236,6 +236,7 @@ final class LogicalDisplay {
 
     private boolean mCanHostTasks;
     private final CopyOnWriteSparseArray<CachedDisplayInfo> mDisplayInfoCache;
+    private static int sExternalDisplayBaseDensityAt1080p;
 
     LogicalDisplay(int displayId, int layerStack, DisplayDevice primaryDisplayDevice,
             CopyOnWriteSparseArray<CachedDisplayInfo> displayInfoCache) {
@@ -260,6 +261,21 @@ final class LogicalDisplay {
 
         // No need to initialize mCanHostTasks here; it's handled in
         // DisplayManagerService#setupLogicalDisplay().
+    }
+
+    /**
+     * Sets the base density used for external displays at 1080p (0 = physical-size density
+     * only). See config_externalDisplayBaseDensityAt1080p.
+     */
+    static void setExternalDisplayBaseDensityAt1080p(int density) {
+        sExternalDisplayBaseDensityAt1080p = density;
+    }
+
+    private static int getExternalDisplayDensityFloor(int width, int height) {
+        if (sExternalDisplayBaseDensityAt1080p <= 0) {
+            return 0;
+        }
+        return sExternalDisplayBaseDensityAt1080p * Math.min(width, height) / 1080;
     }
 
     public void setDevicePositionLocked(int position) {
@@ -586,8 +602,9 @@ final class LogicalDisplay {
                     deviceInfo.allmSupported || deviceInfo.gameContentTypeSupported;
             mBaseDisplayInfo.logicalDensityDpi = deviceInfo.densityDpi > 0
                     ? deviceInfo.densityDpi
-                    : DisplayDensityConfiguration.calculateBaseDensity(currentXDpi, currentYDpi,
-                            maskedWidth, maskedHeight);
+                    : Math.max(DisplayDensityConfiguration.calculateBaseDensity(currentXDpi,
+                            currentYDpi, maskedWidth, maskedHeight),
+                            getExternalDisplayDensityFloor(maskedWidth, maskedHeight));
             mBaseDisplayInfo.physicalXDpi = currentXDpi;
             mBaseDisplayInfo.physicalYDpi = currentYDpi;
             mBaseDisplayInfo.appVsyncOffsetNanos = deviceInfo.appVsyncOffsetNanos;
