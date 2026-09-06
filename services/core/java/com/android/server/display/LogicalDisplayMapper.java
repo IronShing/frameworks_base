@@ -267,6 +267,8 @@ class LogicalDisplayMapper implements DisplayDeviceRepository.Listener {
         mListener = listener;
         mFoldSettingProvider = foldSettingProvider;
         mSingleDisplayDemoMode = SystemProperties.getBoolean("persist.demo.singledisplay", false);
+        LogicalDisplay.setExternalDisplayBaseDensityAt1080p(context.getResources().getInteger(
+                com.android.internal.R.integer.config_externalDisplayBaseDensityAt1080p));
         mSupportsConcurrentInternalDisplays = context.getResources().getBoolean(
                 com.android.internal.R.bool.config_supportsConcurrentInternalDisplays);
         mDeviceStatesOnWhichToWakeUp = toSparseBooleanArray(context.getResources().getIntArray(
