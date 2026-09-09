@@ -47,6 +47,7 @@ import com.android.systemui.statusbar.pipeline.shared.ui.binder.ModernStatusBarV
 import com.android.systemui.util.kotlin.pairwiseBy
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 data class MobileIconColors(@ColorInt val tint: Int, @ColorInt val contrast: Int)
@@ -219,23 +220,29 @@ object MobileIconBinder {
                         }
                     }
 
-                    // Set the network type icon
+                    // Set the network type icon. The container also hosts the HD (VoLTE/VoNR)
+                    // mark underneath the type glyph, so it stays visible for HD alone.
                     launch {
-                        viewModel.networkTypeIcon.distinctUntilChanged().collect { dataTypeId ->
-                            viewModel.verboseLogger?.logBinderReceivedNetworkTypeIcon(
-                                view,
-                                viewModel.subscriptionId,
-                                dataTypeId,
-                            )
-                            dataTypeId?.let { IconViewBinder.bind(dataTypeId, networkTypeView) }
-                            val prevVis = networkTypeContainer.visibility
-                            networkTypeContainer.visibility =
-                                if (dataTypeId != null) VISIBLE else GONE
+                        combine(
+                                viewModel.networkTypeIcon.distinctUntilChanged(),
+                                viewModel.showHd.distinctUntilChanged(),
+                            ) { dataTypeId, isHd -> dataTypeId to isHd }
+                            .collect { (dataTypeId, isHd) ->
+                                viewModel.verboseLogger?.logBinderReceivedNetworkTypeIcon(
+                                    view,
+                                    viewModel.subscriptionId,
+                                    dataTypeId,
+                                )
+                                dataTypeId?.let { IconViewBinder.bind(dataTypeId, networkTypeView) }
+                                networkTypeView.isVisible = dataTypeId != null
+                                val prevVis = networkTypeContainer.visibility
+                                networkTypeContainer.visibility =
+                                    if (dataTypeId != null || isHd) VISIBLE else GONE
 
-                            if (prevVis != networkTypeContainer.visibility) {
-                                view.requestLayout()
+                                if (prevVis != networkTypeContainer.visibility) {
+                                    view.requestLayout()
+                                }
                             }
-                        }
                     }
 
                     // Set the network type background

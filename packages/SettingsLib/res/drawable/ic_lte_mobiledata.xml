@@ -1,30 +1,13 @@
 <!--
-     Copyright (C) 2018 The Android Open Source Project
-
-     Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
-     You may obtain a copy of the License at
-
-          http://www.apache.org/licenses/LICENSE-2.0
-
-     Unless required by applicable law or agreed to in writing, software
-     distributed under the License is distributed on an "AS IS" BASIS,
-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     See the License for the specific language governing permissions and
-     limitations under the License.
+     Compact network-type glyph ("LTE") sized like ic_hd_calling (8dp tall) so it can stack
+     above the HD indicator next to the signal bars. Generated from Open Sans Bold.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-        android:width="26dp"
-        android:height="16dp"
-        android:viewportWidth="26.0"
-        android:viewportHeight="16.0">
+    android:width="15.49dp"
+    android:height="8dp"
+    android:viewportWidth="15.49"
+    android:viewportHeight="8">
     <path
         android:fillColor="#FF000000"
-        android:pathData="M2,13V2.98h1.53v8.57H8.3V13H2z"/>
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M11.24,13V4.43H8.19V2.98h7.63v1.46h-3.05V13H11.24z"/>
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M17.41,13V2.98h6.36v1.46h-4.83v2.65h4.4v1.46h-4.4v3.01h4.83V13H17.41z"/>
+        android:pathData="M0.19999999999999996 7.6V0.39999999999999947H1.7266757865937072V6.339261285909712H4.647058823529411V7.6ZM8.380027359781122 7.6H6.853351573187414V1.670588235294117H4.8982216142270865V0.39999999999999947H10.33515731874145V1.670588235294117H8.380027359781122ZM15.294391244870042 7.6H11.147742818057456V0.39999999999999947H15.294391244870042V1.6508891928864564H12.674418604651162V3.231737346101231H15.112175102599178V4.482626538987688H12.674418604651162V6.339261285909712H15.294391244870042Z"/>
 </vector>
