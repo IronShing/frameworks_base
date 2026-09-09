@@ -1,30 +1,13 @@
 <!--
-     Copyright (C) 2018 The Android Open Source Project
-
-     Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
-     You may obtain a copy of the License at
-
-          http://www.apache.org/licenses/LICENSE-2.0
-
-     Unless required by applicable law or agreed to in writing, software
-     distributed under the License is distributed on an "AS IS" BASIS,
-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     See the License for the specific language governing permissions and
-     limitations under the License.
+     Compact network-type glyph ("1X") sized like ic_hd_calling (8dp tall) so it can stack
+     above the HD indicator next to the signal bars. Generated from Open Sans Bold.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="12.35dp"
-    android:height="15dp"
-    android:viewportWidth="14"
-    android:viewportHeight="17">
-
+    android:width="11.99dp"
+    android:height="8dp"
+    android:viewportWidth="11.99"
+    android:viewportHeight="8">
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M3.77,13.48H2.55V5.05L0.46,5.98V4.84l3.12-1.36h0.19V13.48z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M10.14,7.34l1.87-3.81h1.47L10.9,8.46l2.65,5.02h-1.48l-1.91-3.88l-1.92,3.88H6.74L9.4,8.46l-2.6-4.94h1.46L10.14,7.34z" />
-    <path
-        android:pathData="M 0 0 H 14 V 17 H 0 V 0 Z" />
+        android:fillColor="#FF000000"
+        android:pathData="M3.7704514363885084 7.6H2.248700410396717V3.433652530779754L2.2634746922024624 2.749110807113543L2.2880984952120382 2.0005471956224348Q1.908891928864569 2.379753761969904 1.7611491108071133 2.4979480164158687L0.9337893296853625 3.162790697674418L0.2 2.2467852257181944L2.519562243502052 0.39999999999999947H3.7704514363885084ZM11.792886456908345 7.6H10.04952120383037L8.375102599179208 4.876607387140902L6.700683994528044 7.6H5.065663474692203L7.4541723666210675 3.8867305061559505L5.218331053351573 0.39999999999999947H6.902599179206566L8.45389876880985 2.990424076607387L9.975649794801642 0.39999999999999947H11.620519835841314L9.360054719562243 3.9704514363885086Z"/>
 </vector>

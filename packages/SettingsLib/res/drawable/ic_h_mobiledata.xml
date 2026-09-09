@@ -1,27 +1,13 @@
 <!--
-     Copyright (C) 2018 The Android Open Source Project
-
-     Licensed under the Apache License, Version 2.0 (the "License");
-     you may not use this file except in compliance with the License.
-     You may obtain a copy of the License at
-
-          http://www.apache.org/licenses/LICENSE-2.0
-
-     Unless required by applicable law or agreed to in writing, software
-     distributed under the License is distributed on an "AS IS" BASIS,
-     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-     See the License for the specific language governing permissions and
-     limitations under the License.
+     Compact network-type glyph ("H") sized like ic_hd_calling (8dp tall) so it can stack
+     above the HD indicator next to the signal bars. Generated from Open Sans Bold.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="6.18dp"
-    android:height="15dp"
-    android:viewportWidth="7"
-    android:viewportHeight="17">
-
+    android:width="6.3dp"
+    android:height="8dp"
+    android:viewportWidth="6.3"
+    android:viewportHeight="8">
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M6.76,13.48H5.5v-4.6H1.49v4.6H0.24V3.52h1.25V7.8H5.5V3.52h1.26V13.48z" />
-    <path
-        android:pathData="M 0 0 H 7 V 17 H 0 V 0 Z" />
+        android:fillColor="#FF000000"
+        android:pathData="M6.099863201094391 7.6H4.578112175102599V4.492476060191518H1.7266757865937072V7.6H0.19999999999999996V0.39999999999999947H1.7266757865937072V3.2218878248974008H4.578112175102599V0.39999999999999947H6.099863201094391Z"/>
 </vector>
