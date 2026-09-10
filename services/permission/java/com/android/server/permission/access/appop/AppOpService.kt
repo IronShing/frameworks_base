@@ -18,9 +18,12 @@ package com.android.server.permission.access.appop
 
 import android.app.AppOpsManager
 import android.companion.virtual.VirtualDeviceManager
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Handler
 import android.os.UserHandle
 import android.permission.PermissionManager
+import android.provider.Settings
 import android.util.ArrayMap
 import android.util.ArraySet
 import android.util.LongSparseArray
@@ -30,6 +33,7 @@ import android.util.SparseBooleanArray
 import android.util.SparseIntArray
 import com.android.internal.annotations.VisibleForTesting
 import com.android.internal.util.IntPair
+import com.android.server.LocalServices
 import com.android.server.appop.AppOpsCheckingServiceInterface
 import com.android.server.appop.AppOpsCheckingServiceInterface.AppOpsModeChangedListener
 import com.android.server.permission.access.AccessCheckingService
@@ -44,10 +48,12 @@ import com.android.server.permission.access.appop.AppOpModes.MODE_FOREGROUND
 import com.android.server.permission.access.appop.AppOpModes.MODE_IGNORED
 import com.android.server.permission.access.collection.forEachIndexed
 import com.android.server.permission.access.collection.set
+import com.android.server.permission.access.immutable.anyIndexed
 import com.android.server.permission.access.permission.AppIdPermissionPolicy
 import com.android.server.permission.access.permission.DevicePermissionPolicy
 import com.android.server.permission.access.permission.PermissionFlags
 import com.android.server.permission.access.permission.PermissionService
+import com.android.server.pm.UserManagerInternal
 
 class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingServiceInterface {
     private val packagePolicy =
@@ -79,6 +85,15 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
 
     private lateinit var handler: Handler
 
+    // RedMagic privacy guard: Settings.Secure rm_privacy_guard = "pkg:mask,pkg:mask" (per user;
+    // mask bits 1 = camera, 2 = microphone, 4 = location). A guarded package's runtime app op is
+    // reported as MODE_IGNORED while its permission stays granted, so the app never notices the
+    // block. Runtime-permission op modes are derived from permission flags right here (setUidMode
+    // is a no-op for them), so this is the only place such an override can live.
+    // userId -> packageName -> mask
+    @Volatile private var privacyGuard = SparseArray<ArrayMap<String, Int>>()
+    private val privacyGuardLock = Any()
+
     @Volatile private var listeners = ArraySet<AppOpsModeChangedListener>()
     private val listenersLock = Any()
 
@@ -109,6 +124,164 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
         val permissionListener = OnPermissionFlagsChangedListener()
         permissionPolicy.addOnPermissionFlagsChangedListener(permissionListener)
         devicePermissionPolicy.addOnPermissionFlagsChangedListener(permissionListener)
+        registerPrivacyGuardObserver()
+    }
+
+    private fun privacyGuardBitForOp(appOpCode: Int): Int =
+        when (appOpCode) {
+            AppOpsManager.OP_CAMERA -> PRIVACY_GUARD_CAMERA
+            AppOpsManager.OP_RECORD_AUDIO -> PRIVACY_GUARD_MIC
+            AppOpsManager.OP_COARSE_LOCATION,
+            AppOpsManager.OP_FINE_LOCATION -> PRIVACY_GUARD_LOCATION
+            AppOpsManager.OP_READ_CONTACTS,
+            AppOpsManager.OP_WRITE_CONTACTS -> PRIVACY_GUARD_CONTACTS
+            AppOpsManager.OP_READ_MEDIA_IMAGES,
+            AppOpsManager.OP_READ_MEDIA_VIDEO,
+            AppOpsManager.OP_READ_MEDIA_VISUAL_USER_SELECTED -> PRIVACY_GUARD_MEDIA_VISUAL
+            AppOpsManager.OP_READ_MEDIA_AUDIO -> PRIVACY_GUARD_MEDIA_AUDIO
+            AppOpsManager.OP_READ_EXTERNAL_STORAGE,
+            AppOpsManager.OP_WRITE_EXTERNAL_STORAGE -> PRIVACY_GUARD_FILES
+            AppOpsManager.OP_BLUETOOTH_SCAN,
+            AppOpsManager.OP_BLUETOOTH_CONNECT,
+            AppOpsManager.OP_BLUETOOTH_ADVERTISE -> PRIVACY_GUARD_NEARBY
+            else -> 0
+        }
+
+    private fun readPrivacyGuard(userId: Int): ArrayMap<String, Int> {
+        val out = ArrayMap<String, Int>()
+        val raw =
+            try {
+                Settings.Secure.getStringForUser(
+                    context.contentResolver,
+                    PRIVACY_GUARD_SETTING,
+                    userId,
+                )
+            } catch (e: Exception) {
+                null
+            }
+        if (raw.isNullOrEmpty()) {
+            return out
+        }
+        for (item in raw.split(',')) {
+            val colon = item.lastIndexOf(':')
+            if (colon <= 0) {
+                continue
+            }
+            val mask = item.substring(colon + 1).trim().toIntOrNull() ?: continue
+            if (mask != 0) {
+                out[item.substring(0, colon).trim()] = mask
+            }
+        }
+        return out
+    }
+
+    private fun allUserIds(): IntArray =
+        LocalServices.getService(UserManagerInternal::class.java)?.userIds
+            ?: intArrayOf(UserHandle.USER_SYSTEM)
+
+    private fun registerPrivacyGuardObserver() {
+        synchronized(privacyGuardLock) {
+            val guard = SparseArray<ArrayMap<String, Int>>()
+            for (userId in allUserIds()) {
+                guard.put(userId, readPrivacyGuard(userId))
+            }
+            privacyGuard = guard
+        }
+        val observer =
+            object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean, uri: Uri?, userId: Int) {
+                    if (userId == UserHandle.USER_ALL) {
+                        for (u in allUserIds()) {
+                            reloadPrivacyGuard(u)
+                        }
+                    } else {
+                        reloadPrivacyGuard(userId)
+                    }
+                }
+            }
+        context.contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor(PRIVACY_GUARD_SETTING),
+            false,
+            observer,
+            UserHandle.USER_ALL,
+        )
+    }
+
+    private fun reloadPrivacyGuard(userId: Int) {
+        val newRules = readPrivacyGuard(userId)
+        val oldRules: ArrayMap<String, Int>
+        synchronized(privacyGuardLock) {
+            oldRules = privacyGuard[userId] ?: ArrayMap()
+            if (oldRules == newRules) {
+                return
+            }
+            val guard = SparseArray<ArrayMap<String, Int>>()
+            privacyGuard.forEachIndexed { _, u, rules -> guard.put(u, rules) }
+            guard.put(userId, newRules)
+            privacyGuard = guard
+        }
+        Slog.i(LOG_TAG, "privacy guard changed for user $userId: $newRules")
+        // Tell AppOpsService (cache invalidation, op-changed watchers such as audioserver and
+        // cameraserver) about every (uid, op) whose effective mode may have changed.
+        val listenersLocal = listeners
+        val ops =
+            intArrayOf(
+                AppOpsManager.OP_CAMERA,
+                AppOpsManager.OP_RECORD_AUDIO,
+                AppOpsManager.OP_COARSE_LOCATION,
+                AppOpsManager.OP_FINE_LOCATION,
+                AppOpsManager.OP_READ_CONTACTS,
+                AppOpsManager.OP_WRITE_CONTACTS,
+                AppOpsManager.OP_READ_MEDIA_IMAGES,
+                AppOpsManager.OP_READ_MEDIA_VIDEO,
+                AppOpsManager.OP_READ_MEDIA_VISUAL_USER_SELECTED,
+                AppOpsManager.OP_READ_MEDIA_AUDIO,
+                AppOpsManager.OP_READ_EXTERNAL_STORAGE,
+                AppOpsManager.OP_WRITE_EXTERNAL_STORAGE,
+                AppOpsManager.OP_BLUETOOTH_SCAN,
+                AppOpsManager.OP_BLUETOOTH_CONNECT,
+                AppOpsManager.OP_BLUETOOTH_ADVERTISE,
+            )
+        val packageNames = ArraySet<String>(oldRules.keys)
+        packageNames.addAll(newRules.keys)
+        packageNames.forEachIndexed { _, packageName ->
+            val changedBits = (oldRules[packageName] ?: 0) xor (newRules[packageName] ?: 0)
+            if (changedBits == 0) {
+                return@forEachIndexed
+            }
+            val appId =
+                service.getState { state.externalState.packageStates[packageName]?.appId }
+                    ?: return@forEachIndexed
+            val uid = UserHandle.getUid(userId, appId)
+            for (op in ops) {
+                if ((changedBits and privacyGuardBitForOp(op)) == 0) {
+                    continue
+                }
+                val mode = getUidMode(uid, VirtualDeviceManager.PERSISTENT_DEVICE_ID_DEFAULT, op)
+                listenersLocal.forEachIndexed { _, listener ->
+                    listener.onUidModeChanged(
+                        uid,
+                        op,
+                        mode,
+                        VirtualDeviceManager.PERSISTENT_DEVICE_ID_DEFAULT,
+                    )
+                }
+            }
+        }
+    }
+
+    /** Any guarded package in the app ID blocks the whole (shared) UID. */
+    private fun GetStateScope.isPrivacyGuarded(appId: Int, userId: Int, op: Int): Boolean {
+        val bit = privacyGuardBitForOp(op)
+        if (bit == 0) {
+            return false
+        }
+        val rules = privacyGuard[userId] ?: return false
+        if (rules.isEmpty()) {
+            return false
+        }
+        val packageNames = state.externalState.appIdPackageNames[appId] ?: return false
+        return packageNames.anyIndexed { _, packageName -> ((rules[packageName] ?: 0) and bit) != 0 }
     }
 
     private fun createPermissionAppOpMapping() {
@@ -184,7 +357,11 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             service.getState { with(appIdPolicy) { getAppOpMode(appId, userId, opName) } }
         } else {
             service.getState {
-                getUidModeFromPermissionState(appId, userId, permissionName, deviceId)
+                if (isPrivacyGuarded(appId, userId, op)) {
+                    MODE_IGNORED
+                } else {
+                    getUidModeFromPermissionState(appId, userId, permissionName, deviceId)
+                }
             }
         }
     }
@@ -568,6 +745,15 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
     }
 
     companion object {
+        private const val PRIVACY_GUARD_SETTING = "rm_privacy_guard"
+        private const val PRIVACY_GUARD_CAMERA = 1
+        private const val PRIVACY_GUARD_MIC = 2
+        private const val PRIVACY_GUARD_LOCATION = 4
+        private const val PRIVACY_GUARD_CONTACTS = 8
+        private const val PRIVACY_GUARD_MEDIA_VISUAL = 16
+        private const val PRIVACY_GUARD_MEDIA_AUDIO = 32
+        private const val PRIVACY_GUARD_FILES = 64
+        private const val PRIVACY_GUARD_NEARBY = 128
         private val LOG_TAG = AppOpService::class.java.simpleName
     }
 }

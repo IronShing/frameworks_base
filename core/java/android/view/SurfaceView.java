@@ -1080,6 +1080,20 @@ public class SurfaceView extends View implements ViewRootImpl.SurfaceChangedCall
     public void setSecure(boolean isSecure) {
         boolean ignoreSecure = Settings.Global.getInt(getContext().getContentResolver(),
                 Settings.Global.WINDOW_IGNORE_SECURE, 0) == 1;
+        // NX809J: per-app list (RM Control -> Privacy -> Screenshots). A SurfaceView's SECURE
+        // flag goes straight to SurfaceFlinger, so WindowManager cannot strip it for us.
+        if (isSecure && !ignoreSecure) {
+            final String allow = Settings.Secure.getString(getContext().getContentResolver(),
+                    "rm_screenshot_allow");
+            if (allow != null && !allow.isEmpty()) {
+                for (String p : allow.split(",")) {
+                    if (p.trim().equals(getContext().getPackageName())) {
+                        ignoreSecure = true;
+                        break;
+                    }
+                }
+            }
+        }
         if (isSecure && !ignoreSecure) {
             mSurfaceFlags |= SurfaceControl.SECURE;
         } else {
