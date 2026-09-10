@@ -877,6 +877,8 @@ public class WindowManagerService extends IWindowManager.Stub
                 Settings.Global.DEVELOPMENT_OVERRIDE_DESKTOP_EXPERIENCE_FEATURES);
         private final Uri mEvolutionBlockScreenshotDetectionUri = Settings.Global.getUriFor(
                 Settings.Global.EVOLUTION_WINDOW_BLOCK_SCREENSHOT_DETECTION);
+        // NX809J: per-app "ignore FLAG_SECURE" list (RM Control -> Privacy -> Screenshots).
+        private final Uri mRmScreenshotAllowUri = Settings.Secure.getUriFor(RM_SCREENSHOT_ALLOW);
 
         public SettingsObserver() {
             super(new Handler());
@@ -922,6 +924,8 @@ public class WindowManagerService extends IWindowManager.Stub
             resolver.registerContentObserver(mDevelopmentOverrideDesktopExperienceUri, false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(mEvolutionBlockScreenshotDetectionUri, false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(mRmScreenshotAllowUri, false, this,
                     UserHandle.USER_ALL);
         }
 
@@ -985,6 +989,11 @@ public class WindowManagerService extends IWindowManager.Stub
                 return;
             }
 
+            if (mRmScreenshotAllowUri.equals(uri)) {
+                updateRmScreenshotAllow();
+                return;
+            }
+
             @UpdateAnimationScaleMode
             final int mode;
             if (mWindowAnimationScaleUri.equals(uri)) {
@@ -1007,6 +1016,7 @@ public class WindowManagerService extends IWindowManager.Stub
             updateMagnifyIme();
             updateEvolutionBlockScreenshotDetection();
             updateWallpaperZoomEnabled();
+            updateRmScreenshotAllow();
         }
 
         void updateWallpaperZoomEnabled() {
@@ -1141,6 +1151,32 @@ public class WindowManagerService extends IWindowManager.Stub
 
             synchronized (mGlobalLock) {
                 mMagnifyIme = enabledMagnifyIme;
+            }
+        }
+
+        /**
+         * NX809J: re-read the per-app FLAG_SECURE allowlist for the current user and re-flag
+         * every live surface, so a change applies to windows that are already on screen.
+         */
+        void updateRmScreenshotAllow() {
+            final String raw = Settings.Secure.getStringForUser(mContext.getContentResolver(),
+                    RM_SCREENSHOT_ALLOW, mCurrentUserId);
+            final ArraySet<String> pkgs = new ArraySet<>();
+            if (raw != null) {
+                for (String p : raw.split(",")) {
+                    p = p.trim();
+                    if (!p.isEmpty()) pkgs.add(p);
+                }
+            }
+            synchronized (mGlobalLock) {
+                if (mRmScreenshotAllow.equals(pkgs)) {
+                    return;
+                }
+                mRmScreenshotAllow.clear();
+                mRmScreenshotAllow.addAll(pkgs);
+                if (mRoot != null) {
+                    mRoot.refreshSecureSurfaceState();
+                }
             }
         }
 
@@ -1342,6 +1378,21 @@ public class WindowManagerService extends IWindowManager.Stub
     private final ScreenRecordingCallbackController mScreenRecordingCallbackController;
 
     private volatile boolean mDisableSecureWindows = false;
+
+    /**
+     * NX809J: Settings.Secure key holding comma-separated package names whose windows are never
+     * marked secure, i.e. FLAG_SECURE is ignored for just those apps (screenshots, screen
+     * recording, recents thumbnails all work). Server-side only, so the app still sees its own
+     * flag set and cannot tell. Written by RM Control (Privacy -> Screenshots).
+     */
+    static final String RM_SCREENSHOT_ALLOW = "rm_screenshot_allow";
+    @GuardedBy("mGlobalLock")
+    private final ArraySet<String> mRmScreenshotAllow = new ArraySet<>();
+
+    /** NX809J: true when {@code pkg} is on the per-app "ignore FLAG_SECURE" list. */
+    boolean isSecureIgnoredForPackage(String pkg) {
+        return pkg != null && !mRmScreenshotAllow.isEmpty() && mRmScreenshotAllow.contains(pkg);
+    }
 
     /** Creates an instance of the WindowManagerService for the system server. */
     public static WindowManagerService main(@NonNull final Context context,
@@ -4247,6 +4298,7 @@ public class WindowManagerService extends IWindowManager.Stub
             mSettingsObserver.updateMagnifyIme();
             mSettingsObserver.updateWallpaperZoomEnabled();
         }
+        mSettingsObserver.updateRmScreenshotAllow();   // NX809J: list is per user
     }
 
     /**
@@ -7478,6 +7530,7 @@ public class WindowManagerService extends IWindowManager.Stub
         });
         pw.print("  mBlurEnabled="); pw.println(mBlurController.getBlurEnabled());
         pw.print("  mDisableSecureWindows="); pw.println(mDisableSecureWindows);
+        pw.print("  mRmScreenshotAllow="); pw.println(mRmScreenshotAllow);
 
         mInputManagerCallback.dump(pw, "  ");
         mSnapshotController.dump(pw, " ");
@@ -11271,7 +11324,10 @@ public class WindowManagerService extends IWindowManager.Stub
             displayContent.forAllActivities(
                     (ar) -> {
                         if (!notifiedApps.contains(ar.mActivityComponent) && ar.isVisible()
-                                && ar.isRegisteredForScreenCaptureCallback()) {
+                                && ar.isRegisteredForScreenCaptureCallback()
+                                // Apps on the per-app screenshot allowlist are neither able to
+                                // block the capture nor told about it.
+                                && !isSecureIgnoredForPackage(ar.packageName)) {
                             ar.reportScreenCaptured();
                             notifiedApps.add(ar.mActivityComponent);
                         }

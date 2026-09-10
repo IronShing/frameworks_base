@@ -29,6 +29,8 @@
         <permission name="android.permission.ACCESS_HIDDEN_PROFILES_FULL"/>
         <permission name="android.permission.READ_REMOTE_TASKS"/>
         <permission name="android.permission.REQUEST_TASK_HANDOFF"/>
+        <!-- Circle to Search (nav-handle long press -> ContextualSearchManager) -->
+        <permission name="android.permission.ACCESS_CONTEXTUAL_SEARCH"/>
         <!-- Permissions for showing personal context results in cue bar -->
         <permission name="android.permission.PERSONAL_CONTEXT_PUBLISH_HINTS"/>
         <permission name="android.permission.PERSONAL_CONTEXT_RECEIVE_INSIGHTS"/>
