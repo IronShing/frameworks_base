@@ -21,6 +21,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import android.provider.DocumentsContract
 import android.util.Log
 import androidx.appcompat.content.res.AppCompatResources
@@ -135,22 +136,23 @@ constructor(
             }
         }
 
-        if (screenCaptureRecordFeaturesInteractor.isLargeScreenScreencaptureEnabled) {
-            actionsCallback.provideActionButton(
-                ActionButtonAppearance(
-                    AppCompatResources.getDrawable(context, R.drawable.ic_content_copy),
-                    null,
-                    context.resources.getString(R.string.screenshot_copy_description),
-                ),
-                showDuringEntrance = true,
-            ) {
-                debugLog(LogConfig.DEBUG_ACTIONS) { "Copy tapped" }
-                uiEventLogger.log(SCREENSHOT_COPY_TAPPED, 0, request.packageNameString)
-                onDeferrableActionTapped { result ->
-                    actionExecutor.copyScreenshotToClipboard(result.uri)
-                }
+        // Upstream only offers Copy on large screens; phones get Share/Edit. Offer it on every
+        // form factor so a screenshot can go straight to the clipboard (keyboard image paste).
+        actionsCallback.provideActionButton(
+            ActionButtonAppearance(
+                AppCompatResources.getDrawable(context, R.drawable.ic_content_copy),
+                null,
+                context.resources.getString(R.string.screenshot_copy_description),
+            ),
+            showDuringEntrance = true,
+        ) {
+            debugLog(LogConfig.DEBUG_ACTIONS) { "Copy tapped" }
+            uiEventLogger.log(SCREENSHOT_COPY_TAPPED, 0, request.packageNameString)
+            onDeferrableActionTapped { result ->
+                actionExecutor.copyScreenshotToClipboard(result.uri)
             }
-        } else {
+        }
+        if (!screenCaptureRecordFeaturesInteractor.isLargeScreenScreencaptureEnabled) {
             // The edit button is intentionally hidden on large-screen devices since the screenshot
             // thumbnail serves the same action.
             actionsCallback.provideActionButton(
@@ -249,6 +251,15 @@ constructor(
             return
         }
         this.result = result
+        // Every screenshot lands on the clipboard as well (Settings.Secure rm_screenshot_autocopy,
+        // RedMagic Control > Privacy > Screenshots), so it can be pasted straight away.
+        if (Settings.Secure.getInt(context.contentResolver, "rm_screenshot_autocopy", 1) != 0) {
+            try {
+                actionExecutor.copyScreenshotToClipboard(result.uri, dismiss = false)
+            } catch (e: Exception) {
+                Log.w(TAG, "auto-copy failed", e)
+            }
+        }
         pendingAction?.also { applicationScope.launch { it.invoke(result) } }
     }
 
