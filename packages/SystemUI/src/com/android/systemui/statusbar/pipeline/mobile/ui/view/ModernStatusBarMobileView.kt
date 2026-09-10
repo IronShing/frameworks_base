@@ -98,11 +98,7 @@ class ModernStatusBarMobileView(context: Context, attrs: AttributeSet?) :
                 )
         }
 
-        // RAT indicator
-        requireViewById<ImageView>(R.id.mobile_type).apply {
-            layoutParams.height =
-                context.resources.getDimensionPixelSize(R.dimen.status_bar_mobile_type_size_updated)
-        }
+        // RAT indicator: keeps its corner-glyph size from the layout (status_bar_mobile_type_glyph_size)
     }
 
     override fun initView(slot: String, bindingCreator: () -> ModernStatusBarViewBinding) {

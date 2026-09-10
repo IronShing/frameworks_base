@@ -92,12 +92,13 @@ constructor(
 
     // TODO(b/458072887): Fix the image data being pasteable as text when right-clicking.
     // Copying the screenshot to clipboard avoids the Clipboard overlay UI.
-    fun copyScreenshotToClipboard(uri: Uri) {
+    /** dismiss=false is the automatic copy on capture: the clip is set, the preview stays. */
+    fun copyScreenshotToClipboard(uri: Uri, dismiss: Boolean = true) {
         val clipData = ClipData.newUri(context.contentResolver, "Screenshot", uri)
         clipData.description.extras =
             PersistableBundle().apply { putBoolean(EXTRA_SUPPRESS_OVERLAY, true) }
         clipboardManager.forUser(currentUserHandle).setPrimaryClip(clipData)
-        viewProxy.requestDismissal(null)
+        if (dismiss) viewProxy.requestDismissal(null)
     }
 
     /**

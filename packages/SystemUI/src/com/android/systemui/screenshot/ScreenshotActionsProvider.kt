@@ -22,6 +22,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.UserHandle
+import android.provider.Settings
 import android.provider.DocumentsContract
 import android.provider.Settings
 import android.util.Log
@@ -159,7 +160,9 @@ constructor(
                 debugLog(LogConfig.DEBUG_ACTIONS) { "Save to storage tapped" }
                 actionsCallback.saveToStorage()
             }
-        } else if (screenCaptureRecordFeaturesInteractor.isLargeScreenScreencaptureEnabled) {
+        } else {
+            // Offer Copy on every form factor (upstream is large-screen only) so a
+            // screenshot can go straight to the clipboard for keyboard image paste.
             actionsCallback.provideActionButton(
                 ActionButtonAppearance(
                     AppCompatResources.getDrawable(context, R.drawable.ic_content_copy),
@@ -174,7 +177,8 @@ constructor(
                     actionExecutor.copyScreenshotToClipboard(result.uri)
                 }
             }
-        } else {
+        }
+        if (!screenCaptureRecordFeaturesInteractor.isLargeScreenScreencaptureEnabled) {
             // The edit button is intentionally hidden on large-screen devices since the screenshot
             // thumbnail serves the same action.
             actionsCallback.provideActionButton(
@@ -291,6 +295,15 @@ constructor(
             debugLog(LogConfig.DEBUG_ACTIONS) { "Replacing completed screenshot result" }
         }
         this.result = result
+        // Every screenshot lands on the clipboard as well (Settings.Secure rm_screenshot_autocopy,
+        // RedMagic Control > Privacy > Screenshots), so it can be pasted straight away.
+        if (Settings.Secure.getInt(context.contentResolver, "rm_screenshot_autocopy", 1) != 0) {
+            try {
+                actionExecutor.copyScreenshotToClipboard(result.uri, dismiss = false)
+            } catch (e: Exception) {
+                Log.w(TAG, "auto-copy failed", e)
+            }
+        }
         pendingAction?.also { applicationScope.launch { it.invoke(result) } }
         pendingAction = null
     }
