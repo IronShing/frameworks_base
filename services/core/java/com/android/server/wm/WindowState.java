@@ -1966,7 +1966,11 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
         }
 
         if ((mAttrs.flags & WindowManager.LayoutParams.FLAG_SECURE) != 0) {
-            return true;
+            // NX809J: per-app allowlist skips only the app's own FLAG_SECURE; device-policy and
+            // sensitive-content protection below still apply.
+            if (!mWmService.isSecureIgnoredForPackage(getOwningPackage())) {
+                return true;
+            }
         }
 
         // block screen capture to protect sensitive notifications or content on the screen.
