@@ -4199,7 +4199,12 @@ public final class NotificationPanelViewController implements
                 return false;
             }
 
-            if (mDoubleTapToSleepEnabled && !mPulsing && !mDozing) {
+            // Lockscreen only. QQSGestureListener already handles the status-bar strip and the
+            // lockscreen; running this detector on every touch the shade window sees while
+            // unlocked means two quick keystrokes during a heads-up (remote input) put the
+            // device to sleep (seen 2026-09-10: WhatsApp HUN pinned mid-typing -> screen off).
+            if (mDoubleTapToSleepEnabled && !mPulsing && !mDozing
+                    && mBarState == StatusBarState.KEYGUARD) {
                 mDoubleTapGesture.onTouchEvent(event);
             }
 
