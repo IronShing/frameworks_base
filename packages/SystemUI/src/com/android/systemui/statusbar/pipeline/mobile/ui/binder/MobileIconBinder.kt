@@ -220,8 +220,8 @@ object MobileIconBinder {
                         }
                     }
 
-                    // Set the network type icon. The container also hosts the HD (VoLTE/VoNR)
-                    // mark underneath the type glyph, so it stays visible for HD alone.
+                    // Set the network type icon (drawn in the corner of the signal bars). The
+                    // mobile_type_container only hosts the HD (VoLTE/VoNR) mark now.
                     launch {
                         combine(
                                 viewModel.networkTypeIcon.distinctUntilChanged(),
@@ -236,8 +236,7 @@ object MobileIconBinder {
                                 dataTypeId?.let { IconViewBinder.bind(dataTypeId, networkTypeView) }
                                 networkTypeView.isVisible = dataTypeId != null
                                 val prevVis = networkTypeContainer.visibility
-                                networkTypeContainer.visibility =
-                                    if (dataTypeId != null || isHd) VISIBLE else GONE
+                                networkTypeContainer.visibility = if (isHd) VISIBLE else GONE
 
                                 if (prevVis != networkTypeContainer.visibility) {
                                     view.requestLayout()
