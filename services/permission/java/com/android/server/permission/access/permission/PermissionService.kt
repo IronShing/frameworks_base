@@ -644,6 +644,12 @@ class PermissionService(private val service: AccessCheckingService) :
         deviceId: String,
         userId: Int,
     ): Int {
+        // NX809J privacy guard: report the advertising-ID permission DENIED for apps the user has
+        // ad-ID-guarded, so GMS/microG return an all-zeros GAID. Gated on the exact permission
+        // name so the (rare) settings read only happens on an AD_ID check.
+        if (permissionName == AD_ID_PERMISSION && isAdIdGuarded(packageName, userId)) {
+            return PackageManager.PERMISSION_DENIED
+        }
         if (!userManagerInternal.exists(userId)) {
             return PackageManager.PERMISSION_DENIED
         }
@@ -660,6 +666,24 @@ class PermissionService(private val service: AccessCheckingService) :
         } else {
             PackageManager.PERMISSION_DENIED
         }
+    }
+
+    /** NX809J privacy guard: is this package's advertising ID blocked (bit 4096 of its mask)? */
+    private fun isAdIdGuarded(packageName: String, userId: Int): Boolean {
+        val raw =
+            Settings.Secure.getStringForUser(
+                context.contentResolver,
+                PRIVACY_GUARD_SETTING,
+                userId,
+            ) ?: return false
+        for (item in raw.split(',')) {
+            val colon = item.indexOf(':')
+            if (colon <= 0) continue
+            if (item.substring(0, colon).trim() != packageName) continue
+            val mask = item.substring(colon + 1).trim().toIntOrNull() ?: return false
+            return (mask and PRIVACY_GUARD_AD_ID) != 0
+        }
+        return false
     }
 
     /**
@@ -3079,6 +3103,14 @@ class PermissionService(private val service: AccessCheckingService) :
 
     companion object {
         private val LOG_TAG = PermissionService::class.java.simpleName
+
+        // NX809J privacy guard: per-app advertising-ID block. GMS/microG gate the GAID on this
+        // permission; checkPermission() reports it DENIED for guarded apps (bit 4096 of the
+        // rm_privacy_guard mask) so they hand out an all-zeros advertising ID. EXPERIMENTAL:
+        // effective only if GMS re-checks the permission per request rather than caching it.
+        private const val PRIVACY_GUARD_SETTING = "rm_privacy_guard"
+        private const val PRIVACY_GUARD_AD_ID = 4096
+        private const val AD_ID_PERMISSION = "com.google.android.gms.permission.AD_ID"
 
         /**
          * This change makes it so that apps are told to show rationale for asking for background

@@ -144,6 +144,18 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             AppOpsManager.OP_BLUETOOTH_SCAN,
             AppOpsManager.OP_BLUETOOTH_CONNECT,
             AppOpsManager.OP_BLUETOOTH_ADVERTISE -> PRIVACY_GUARD_NEARBY
+            AppOpsManager.OP_READ_PHONE_STATE,
+            AppOpsManager.OP_READ_PHONE_NUMBERS,
+            AppOpsManager.OP_READ_CALL_LOG,
+            AppOpsManager.OP_WRITE_CALL_LOG -> PRIVACY_GUARD_PHONE
+            AppOpsManager.OP_READ_SMS,
+            AppOpsManager.OP_RECEIVE_SMS,
+            AppOpsManager.OP_SEND_SMS,
+            AppOpsManager.OP_RECEIVE_MMS -> PRIVACY_GUARD_SMS
+            AppOpsManager.OP_READ_CALENDAR,
+            AppOpsManager.OP_WRITE_CALENDAR -> PRIVACY_GUARD_CALENDAR
+            AppOpsManager.OP_BODY_SENSORS,
+            AppOpsManager.OP_ACTIVITY_RECOGNITION -> PRIVACY_GUARD_SENSORS
             else -> 0
         }
 
@@ -241,6 +253,18 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
                 AppOpsManager.OP_BLUETOOTH_SCAN,
                 AppOpsManager.OP_BLUETOOTH_CONNECT,
                 AppOpsManager.OP_BLUETOOTH_ADVERTISE,
+                AppOpsManager.OP_READ_PHONE_STATE,
+                AppOpsManager.OP_READ_PHONE_NUMBERS,
+                AppOpsManager.OP_READ_CALL_LOG,
+                AppOpsManager.OP_WRITE_CALL_LOG,
+                AppOpsManager.OP_READ_SMS,
+                AppOpsManager.OP_RECEIVE_SMS,
+                AppOpsManager.OP_SEND_SMS,
+                AppOpsManager.OP_RECEIVE_MMS,
+                AppOpsManager.OP_READ_CALENDAR,
+                AppOpsManager.OP_WRITE_CALENDAR,
+                AppOpsManager.OP_BODY_SENSORS,
+                AppOpsManager.OP_ACTIVITY_RECOGNITION,
             )
         val packageNames = ArraySet<String>(oldRules.keys)
         packageNames.addAll(newRules.keys)
@@ -754,6 +778,11 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
         private const val PRIVACY_GUARD_MEDIA_AUDIO = 32
         private const val PRIVACY_GUARD_FILES = 64
         private const val PRIVACY_GUARD_NEARBY = 128
+        private const val PRIVACY_GUARD_PHONE = 256
+        private const val PRIVACY_GUARD_SMS = 512
+        private const val PRIVACY_GUARD_CALENDAR = 1024
+        private const val PRIVACY_GUARD_SENSORS = 2048
+        // Bit 4096 (AD_ID) is handled by the AD_ID permission patch, not the app-op guard.
         private val LOG_TAG = AppOpService::class.java.simpleName
     }
 }
