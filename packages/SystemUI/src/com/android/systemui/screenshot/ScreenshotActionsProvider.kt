@@ -24,7 +24,6 @@ import android.net.Uri
 import android.os.UserHandle
 import android.provider.Settings
 import android.provider.DocumentsContract
-import android.provider.Settings
 import android.util.Log
 import androidx.appcompat.content.res.AppCompatResources
 import com.android.internal.logging.UiEventLogger
