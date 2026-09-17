@@ -93,6 +93,14 @@ public interface AppOpsCheckingServiceInterface {
     int getUidMode(int uid, String persistentDeviceId, int op);
 
     /**
+     * NX809J privacy guard: whether {@link #getUidMode} reports {@code MODE_IGNORED} for this
+     * uid/op only because of a privacy-guard rule (the permission itself is still granted).
+     */
+    default boolean isPrivacyGuarded(int uid, int op) {
+        return false;
+    }
+
+    /**
      * Set the app-op mode for a particular uid and op.
      * The mode is not set if the mode is the same as the default mode for the op.
      * @param uid user id for which we want to set the mode.
