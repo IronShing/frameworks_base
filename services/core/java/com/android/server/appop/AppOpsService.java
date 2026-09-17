@@ -153,6 +153,7 @@ import android.util.Slog;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
+import android.util.LongSparseLongArray;
 import android.util.SparseLongArray;
 import android.util.TimeUtils;
 import android.util.Xml;
@@ -3059,12 +3060,48 @@ public class AppOpsService extends IAppOpsService.Stub {
             }
         }
 
+        final int mode;
         if (Flags.appopModeCachingEnabled()) {
-            return getAppOpMode(code, uid, resolvedPackageName, attributionTag, virtualDeviceId,
+            mode = getAppOpMode(code, uid, resolvedPackageName, attributionTag, virtualDeviceId,
                     raw, true);
         } else {
-            return checkOperationUnchecked(code, uid, resolvedPackageName, attributionTag,
+            mode = checkOperationUnchecked(code, uid, resolvedPackageName, attributionTag,
                     virtualDeviceId, raw);
+        }
+        // NX809J privacy guard: an app probing its OWN op with checkOp must not learn that it is
+        // guarded (WeChat's scanner checks CAMERA first and shows a "no permission" page without
+        // ever opening the camera, so neither the block nor the "tried to use" alert is seen).
+        // Answer as if the granted permission were honoured; real use still goes through
+        // noteOp/startOp from cameraserver/audioserver/location, which keep returning IGNORED.
+        if (mode == AppOpsManager.MODE_IGNORED
+                && mAppOpsCheckingService.isPrivacyGuarded(uid, AppOpsManager.opToSwitch(code))) {
+            if (Binder.getCallingUid() == uid) {
+                return MODE_ALLOWED;
+            }
+            // A provider checking on the app's behalf (MediaProvider only notes the FIRST access
+            // per uid and plain-checks every later one) would otherwise block silently, so the
+            // guard app never gets to ask. Report the check to the noted watchers instead.
+            reportGuardedCheck(code, uid, resolvedPackageName, attributionTag, virtualDeviceId);
+        }
+        return mode;
+    }
+
+    /** Guarded checkOps seen from proxies, keyed uid<<8|op -> last report uptime. */
+    @GuardedBy("this")
+    private final LongSparseLongArray mGuardedCheckReported = new LongSparseLongArray();
+    private static final long GUARDED_CHECK_REPORT_GAP_MS = 2000;
+
+    private void reportGuardedCheck(int code, int uid, String packageName,
+            @Nullable String attributionTag, int virtualDeviceId) {
+        final long key = ((long) uid << 8) | AppOpsManager.opToSwitch(code);
+        final long now = SystemClock.uptimeMillis();
+        synchronized (this) {
+            if (now - mGuardedCheckReported.get(key, 0) < GUARDED_CHECK_REPORT_GAP_MS) {
+                return;
+            }
+            mGuardedCheckReported.put(key, now);
+            scheduleOpNotedIfNeededLocked(code, uid, packageName, attributionTag,
+                    virtualDeviceId, OP_FLAG_TRUSTED_PROXIED, AppOpsManager.MODE_IGNORED);
         }
     }
 
