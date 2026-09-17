@@ -390,6 +390,15 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
         }
     }
 
+    override fun isPrivacyGuarded(uid: Int, op: Int): Boolean {
+        if (runtimeAppOpToPermissionNames[op] == null) {
+            return false
+        }
+        val appId = UserHandle.getAppId(uid)
+        val userId = UserHandle.getUserId(uid)
+        return service.getState { isPrivacyGuarded(appId, userId, op) }
+    }
+
     private fun getUidModes(uid: Int): ArrayMap<String, Int>? {
         val appId = UserHandle.getAppId(uid)
         val userId = UserHandle.getUserId(uid)
