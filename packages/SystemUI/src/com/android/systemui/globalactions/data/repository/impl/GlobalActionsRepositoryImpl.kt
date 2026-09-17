@@ -63,6 +63,7 @@ constructor(@param:Application private val context: Context) : GlobalActionsRepo
             GlobalActionType.SCREENSHOT,
             GlobalActionType.LOGOUT,
             GlobalActionType.SYSTEM_UPDATE,
+            GlobalActionType.CAPTURELOG,
         )
 
     /** Actions not available when device is locked. */

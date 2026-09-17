@@ -942,6 +942,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                         addIfShouldShowAction(tempActions, new LogoutAction());
                     }
                     break;
+                case CAPTURELOG:
+                    // Only when RedMagicControl, which does the work, is installed (its receiver
+                    // is registered at runtime, so it cannot be queried here).
+                    if (CaptureLogAction.isAvailable(mContext)) {
+                        addIfShouldShowAction(tempActions, new CaptureLogAction());
+                    }
+                    break;
                 case SYSTEM_UPDATE:
                     addIfShouldShowAction(tempActions, new SystemUpdateAction());
                     break;
@@ -1475,6 +1482,60 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             return false;
         }
 
+    }
+
+    /**
+     * NX809J "Capture log": hand off to RedMagicControl, which snapshots every logcat buffer to
+     * a file and posts a "tap to share" notification. SystemUI only sends the (explicit,
+     * STATUS_BAR_SERVICE-protected) broadcast after the dialog has gone away, so the user can
+     * grab the log seconds after seeing a bug without adb. Shown on the keyguard too: nothing
+     * on screen is revealed, the file lands behind a notification.
+     */
+    class CaptureLogAction extends SinglePressAction {
+        static final String RMC_PACKAGE = "com.nubia.rmcontrol";
+        static final String ACTION_CAPTURE_LOG = "com.nubia.rmcontrol.CAPTURE_LOG";
+
+        static Intent intent() {
+            return new Intent(ACTION_CAPTURE_LOG).setPackage(RMC_PACKAGE)
+                    .addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        }
+
+        /** Secure setting owned by RedMagicControl (its Settings > Logs switch); default on. */
+        static final String SETTING_ENABLED = "rm_powermenu_log";
+
+        static boolean isAvailable(Context context) {
+            if (Settings.Secure.getInt(context.getContentResolver(), SETTING_ENABLED, 1) == 0) {
+                return false;
+            }
+            try {
+                return context.getPackageManager().getApplicationInfo(RMC_PACKAGE, 0).enabled;
+            } catch (PackageManager.NameNotFoundException e) {
+                return false;
+            }
+        }
+
+        CaptureLogAction() {
+            super(com.android.systemui.res.R.drawable.ic_global_actions_capturelog,
+                    com.android.systemui.res.R.string.global_action_capturelog);
+        }
+
+        @Override
+        public void onPress() {
+            mHandler.postDelayed(() -> {
+                Log.i(TAG, "CaptureLogAction: requesting log capture");
+                mContext.sendBroadcast(intent());
+            }, mDialogPressDelay);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return true;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return false;
+        }
     }
 
     @VisibleForTesting
