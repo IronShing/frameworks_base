@@ -242,6 +242,8 @@
 
     <!-- Power menu item for taking a screenshot [CHAR LIMIT=20]-->
     <string name="global_action_screenshot">Screenshot</string>
+    <!-- NX809J power menu: save a logcat snapshot for bug reports (handled by RedMagicControl) [CHAR LIMIT=15] -->
+    <string name="global_action_capturelog">Capture log</string>
     <!-- Message shown in power menu when Extend Unlock has been disabled [CHAR_LIMIT=NONE] -->
     <string name="global_action_smart_lock_disabled">Extend Unlock disabled</string>
 

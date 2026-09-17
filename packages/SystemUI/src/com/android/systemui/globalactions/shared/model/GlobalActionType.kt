@@ -35,7 +35,9 @@ enum class GlobalActionType(val configKey: String) {
     SYSTEM_UPDATE("system_update"),
     STANDBY("standby"),
     DEVICECONTROLS("devicecontrols"),
-    ONTHEGO("onthego");
+    ONTHEGO("onthego"),
+    // NX809J: logcat snapshot handed to RedMagicControl (CaptureLogAction).
+    CAPTURELOG("capturelog");
 
     companion object {
         private val KEY_MAP = entries.associateBy { it.configKey }

@@ -60,6 +60,12 @@
     <!-- Whether to enable MediaTek-specific optical dimming for UDFPS -->
     <bool name="config_udfpsMtkGhbmDimming">false</bool>
 
+    <!-- Kobject uevent token (e.g. "aod_areameet_down=true") that the touch IC emits for a
+         screen-off finger-down on an ultrasonic UDFPS sensor, when it reports it that way
+         instead of through a doze sensor. UdfpsController feeds it to the AOD-interrupt path
+         (immediate HAL scan, no display/overlay wait). Empty = not used. -->
+    <string name="config_udfpsFingerDownUevent" translatable="false"></string>
+
     <!-- Name of the UDFPS HBM DimLayer for the HWComposer -->
     <string name="config_udfpsHbmDimLayer" translatable="false">OnScreenFingerprintDimLayer</string>
 
