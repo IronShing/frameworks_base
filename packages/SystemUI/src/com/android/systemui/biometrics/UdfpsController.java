@@ -53,10 +53,13 @@ import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemProperties;
 import android.os.Trace;
+import android.os.UEventObserver;
 import android.os.VibrationAttributes;
 import android.os.VibrationEffect;
 import android.provider.Settings;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
@@ -235,8 +238,16 @@ public class UdfpsController implements DozeReceiver, Dumpable {
     // mode.
     private boolean mIsAodInterruptActive;
     @Nullable private Runnable mCancelAodFingerUpAction;
+    // The active AOD interrupt came from the touch-IC uevent (config_udfpsFingerDownUevent). The
+    // ZTE/Goodix virtual HAL reports ACQUIRED_GOOD right after onPointerDown, before it has
+    // captured anything, so an acquired-driven finger-up would abort the scan ("Up too fast").
+    private boolean mUeventFingerDown;
     private boolean mScreenOn;
     private Runnable mAodInterruptRunnable;
+    // Screen-off finger-down bridge for touch ICs that report the FP-area finger-down as a
+    // kobject uevent (config_udfpsFingerDownUevent); null when not configured. Live gate:
+    private static final String FINGER_DOWN_UEVENT_PROP = "persist.sys.fp_wake.sysui";
+    private UEventObserver mFingerDownUEventObserver;
     private boolean mOnFingerDown;
     private boolean mHalPointerDownReported;
     private boolean mAuthOutcomeReached;
@@ -462,6 +473,11 @@ public class UdfpsController implements DozeReceiver, Dumpable {
                         return;
                     }
                     mAcquiredReceived = true;
+                    if (mUeventFingerDown) {
+                        // Finger-up comes from the real touch (UP/CANCEL) or the delayed
+                        // AOD fallback; the HAL's early ACQUIRED must not end the scan.
+                        return;
+                    }
                     tryAodSendFingerUp();
                 });
             }
@@ -903,6 +919,33 @@ public class UdfpsController implements DozeReceiver, Dumpable {
 
         mDisableSmartPixels = mContext.getResources().getBoolean(com.android.systemui.res.R.bool.config_disableSmartPixelsOnUDFPS);
 
+        // Sensors whose touch IC, in screen-off low-power mode, reports a finger-down on the
+        // sensor as a kobject uevent rather than a doze sensor: bridge it to the AOD-interrupt
+        // path so the HAL scans the held finger immediately, instead of a helper having to wake
+        // the display and wait for the overlay window to accept a synthetic touch. Gated only on
+        // the device config (the HAL may still declare the sensor optical; onFingerDown reports
+        // the pointer to the HAL before any display configuration).
+        final String fingerDownUevent = mContext.getResources().getString(
+                com.android.systemui.res.R.string.config_udfpsFingerDownUevent);
+        if (!TextUtils.isEmpty(fingerDownUevent)) {
+            try {
+                final UEventObserver observer = new UEventObserver() {
+                    @Override
+                    public void onUEvent(UEvent event) {
+                        // UEvent thread; gate + hand-off only.
+                        if (!SystemProperties.getBoolean(FINGER_DOWN_UEVENT_PROP, false)) return;
+                        final long uptime = mSystemClock.uptimeMillis();
+                        mFgExecutor.execute(() -> onFingerDownUevent(uptime));
+                    }
+                };
+                observer.startObserving(fingerDownUevent);
+                mFingerDownUEventObserver = observer;
+                Log.i(TAG, "observing screen-off finger-down uevent \"" + fingerDownUevent + "\"");
+            } catch (RuntimeException e) {
+                Log.e(TAG, "cannot observe finger-down uevent (sepolicy?)", e);
+            }
+        }
+
         if (com.android.internal.util.evolution.Utils.isPackageInstalled(mContext,
                 "org.evolution.udfps.animations")) {
             updateUdfpsAnimation();
@@ -1207,7 +1250,25 @@ public class UdfpsController implements DozeReceiver, Dumpable {
         }
     }
 
+    /** Screen-off finger-down reported by the touch IC (see config_udfpsFingerDownUevent). */
+    private void onFingerDownUevent(long uptime) {
+        // Light the display in parallel with the scan: a match then lands as a normal unlock
+        // while the panel is still coming up; a mismatch still leaves the user on the lock screen.
+        mPowerManager.wakeUp(uptime, PowerManager.WAKE_REASON_BIOMETRIC, "udfps:fingerDownUevent");
+        final Rect sensor = mOverlayParams.getSensorBounds();
+        Log.d(TAG, "finger-down uevent -> aod interrupt at " + sensor.centerX() + "," + sensor.centerY()
+                + " fpRunning=" + mKeyguardUpdateMonitor.isFingerprintDetectionRunning()
+                + " overlay=" + (mOverlay != null));
+        mUeventFingerDown = true;
+        onAodInterrupt(sensor.centerX(), sensor.centerY(), 0f, 0f);
+        if (!mIsAodInterruptActive) {
+            mUeventFingerDown = false;
+        }
+    }
+
     private boolean isScreenOffUnlockEnabled() {
+        // The uevent bridge only exists for sensors that scan with the display off.
+        if (mFingerDownUEventObserver != null) return true;
         return mContext.getResources().getBoolean(R.bool.config_screen_off_udfps_enabled)
                 && Settings.Secure.getIntForUser(
                         mContext.getContentResolver(),
@@ -1256,6 +1317,7 @@ public class UdfpsController implements DozeReceiver, Dumpable {
     @VisibleForTesting
     void cancelAodSendFingerUpAction() {
         mIsAodInterruptActive = false;
+        mUeventFingerDown = false;
         if (mCancelAodFingerUpAction != null) {
             mCancelAodFingerUpAction.run();
             mCancelAodFingerUpAction = null;
