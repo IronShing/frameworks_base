@@ -150,17 +150,23 @@ class ClockStyle @JvmOverloads constructor(
         }
     }
 
+    // MediaSessionManager delivers on its ScrimUtils-bg thread; applyClockColors touches
+    // views (setTypeface -> requestLayout), so hop to the main thread like WaveformSeekBar does.
     private val mediaDataListener = object : MediaSessionManager.MediaDataListener {
         override fun onPlaybackStateChanged(state: Int) {
             if (state != PlaybackState.STATE_PLAYING) {
-                currentAlbumColor = null
-                if (albumArtColorEnabled) applyClockColors()
+                post {
+                    currentAlbumColor = null
+                    if (albumArtColorEnabled) applyClockColors()
+                }
             }
         }
 
         override fun onMediaColorsChanged(color: Int) {
-            currentAlbumColor = color
-            if (albumArtColorEnabled) applyClockColors()
+            post {
+                currentAlbumColor = color
+                if (albumArtColorEnabled) applyClockColors()
+            }
         }
     }
 
