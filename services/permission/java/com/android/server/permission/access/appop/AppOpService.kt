@@ -305,7 +305,26 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             return false
         }
         val packageNames = state.externalState.appIdPackageNames[appId] ?: return false
-        return packageNames.anyIndexed { _, packageName -> ((rules[packageName] ?: 0) and bit) != 0 }
+        if (!packageNames.anyIndexed { _, packageName -> ((rules[packageName] ?: 0) and bit) != 0 }) {
+            return false
+        }
+        // Android's own "Select photos" (partial access) is a stronger, user-chosen limit than the
+        // guard: the app can only ever see the pictures the user picked. Guarding that op on top
+        // makes the app believe it has no permission at all, so it re-launches the system picker
+        // and the selection looks "reset" every few minutes (Alibaba.com, 2026-09-28). Let the
+        // user-selected op through while full photo/video access is not granted.
+        if (op == AppOpsManager.OP_READ_MEDIA_VISUAL_USER_SELECTED) {
+            val fullAccess =
+                PARTIAL_ACCESS_FULL_PERMISSIONS.any { permissionName ->
+                    PermissionFlags.isAppOpGranted(
+                        with(permissionPolicy) { getPermissionFlags(appId, userId, permissionName) }
+                    )
+                }
+            if (!fullAccess) {
+                return false
+            }
+        }
+        return true
     }
 
     private fun createPermissionAppOpMapping() {
@@ -791,6 +810,11 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
         private const val PRIVACY_GUARD_SMS = 512
         private const val PRIVACY_GUARD_CALENDAR = 1024
         private const val PRIVACY_GUARD_SENSORS = 2048
+        private val PARTIAL_ACCESS_FULL_PERMISSIONS =
+            arrayOf(
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VIDEO,
+            )
         // Bit 4096 (AD_ID) is handled by the AD_ID permission patch, not the app-op guard.
         private val LOG_TAG = AppOpService::class.java.simpleName
     }
