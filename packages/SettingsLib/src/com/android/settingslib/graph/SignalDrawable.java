@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
+import android.content.res.Resources;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -92,6 +93,22 @@ public class SignalDrawable extends DrawableWrapper {
     private final float mCutoutHeightFraction;
     private final float mRCutoutWidthFraction;
     private final float mRCutoutHeightFraction;
+    // Inline roaming "R" for the new status bar icons: drawn inside the signal bars at the
+    // bottom-end corner, with a halo (the R's outline grown by mRoamingInlineHalo) cut out of
+    // the bars so the glyph stays legible. All values are in units of the bar icon's
+    // 16x12 viewport and scaled to the current bounds in draw().
+    private final Path mRoamingInlinePath = new Path();
+    private final float mRoamingInlinePathWidth;
+    private final float mRoamingInlinePathHeight;
+    private final float mRoamingInlineX;
+    private final float mRoamingInlineY;
+    private final float mRoamingInlineHeight;
+    private final float mRoamingInlineHalo;
+    private final Paint mRoamingHaloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path mScaledRoamingInlinePath = new Path();
+    private final Matrix mRoamingInlineMatrix = new Matrix();
+    private static final float NEW_VIEWPORT_WIDTH = 16f;
+    private static final float NEW_VIEWPORT_HEIGHT = 12f;
     private float mDarkIntensity = -1;
     private final int mIntrinsicSize;
     private boolean mAnimating;
@@ -118,6 +135,15 @@ public class SignalDrawable extends DrawableWrapper {
                 R.dimen.config_roamingCutoutWidthFraction);
         mRCutoutHeightFraction = context.getResources().getFloat(
                 R.dimen.config_roamingCutoutHeightFraction);
+        final Resources res = context.getResources();
+        mRoamingInlinePath.set(PathParser.createPathFromPathData(
+                context.getString(R.string.config_signalRoamingInlinePath)));
+        mRoamingInlinePathWidth = res.getFloat(R.dimen.config_signalRoamingInlinePathWidth);
+        mRoamingInlinePathHeight = res.getFloat(R.dimen.config_signalRoamingInlinePathHeight);
+        mRoamingInlineX = res.getFloat(R.dimen.config_signalRoamingInlineX);
+        mRoamingInlineY = res.getFloat(R.dimen.config_signalRoamingInlineY);
+        mRoamingInlineHeight = res.getFloat(R.dimen.config_signalRoamingInlineHeight);
+        mRoamingInlineHalo = res.getFloat(R.dimen.config_signalRoamingInlineHalo);
         mDarkModeFillColor = Utils.getColorStateListDefaultColor(context,
                 R.color.dark_mode_icon_color_single_tone);
         mLightModeFillColor = Utils.getColorStateListDefaultColor(context,
@@ -125,6 +151,10 @@ public class SignalDrawable extends DrawableWrapper {
         mIntrinsicSize = context.getResources().getDimensionPixelSize(R.dimen.signal_icon_size);
         mTransparentPaint.setColor(context.getColor(android.R.color.transparent));
         mTransparentPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        mRoamingHaloPaint.set(mTransparentPaint);
+        mRoamingHaloPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+        mRoamingHaloPaint.setStrokeJoin(Paint.Join.ROUND);
+        mRoamingHaloPaint.setStrokeCap(Paint.Cap.ROUND);
         mHandler = handler;
         setDarkIntensity(0);
     }
@@ -194,7 +224,7 @@ public class SignalDrawable extends DrawableWrapper {
         int level = (packedState & LEVEL_MASK);
 
         if (newStatusBarIcons()) {
-            if (isInState(STATE_CUT)) {
+            if (isInState(STATE_CUT) || isInState(STATE_CUT_AND_R)) {
                 cutOutOffset = 20;
             }
         }
@@ -264,6 +294,8 @@ public class SignalDrawable extends DrawableWrapper {
             drawDotAndPadding(x - dotSpacing * 2, y, dotPadding, dotSize, 0);
             canvas.drawPath(mCutoutPath, mTransparentPaint);
             canvas.drawPath(mForegroundPath, mForegroundPaint);
+        } else if (newStatusBarIcons() && isInState(STATE_R)) {
+            drawInlineRoaming(canvas, width, height, isRtl);
         } else if (!newStatusBarIcons() && isInState(STATE_CUT_AND_R)) {
             // Roaming
             float cutWidth = mRCutoutWidthFraction;
@@ -316,6 +348,39 @@ public class SignalDrawable extends DrawableWrapper {
             canvas.restore();
         }
         canvas.restore();
+    }
+
+    /**
+     * Whether the roaming "R" is drawn inside the signal bars by this drawable (new status bar
+     * icons only). When true the separate end-side roaming view should stay hidden.
+     */
+    public boolean drawsInlineRoaming() {
+        return newStatusBarIcons() && isInState(STATE_R);
+    }
+
+    /**
+     * Draws the roaming "R" in the bottom-end corner of the bars: first the glyph outline grown
+     * by the halo is punched out of the bars (SRC_IN transparent), then the glyph is filled.
+     * The canvas is already mirrored for RTL, so the glyph itself is flipped back around its own
+     * centre to stay readable.
+     */
+    private void drawInlineRoaming(Canvas canvas, float width, float height, boolean isRtl) {
+        final float sx = width / NEW_VIEWPORT_WIDTH;
+        final float sy = height / NEW_VIEWPORT_HEIGHT;
+        final float glyphScale = mRoamingInlineHeight * sy / mRoamingInlinePathHeight;
+        final float glyphWidth = mRoamingInlinePathWidth * glyphScale;
+        final float glyphHeight = mRoamingInlineHeight * sy;
+        final float x = mRoamingInlineX * sx;
+        final float y = mRoamingInlineY * sy;
+        mRoamingInlineMatrix.setScale(glyphScale, glyphScale);
+        mRoamingInlineMatrix.postTranslate(x, y);
+        if (isRtl) {
+            mRoamingInlineMatrix.postScale(-1f, 1f, x + glyphWidth / 2f, y + glyphHeight / 2f);
+        }
+        mRoamingInlinePath.transform(mRoamingInlineMatrix, mScaledRoamingInlinePath);
+        mRoamingHaloPaint.setStrokeWidth(2f * mRoamingInlineHalo * sy);
+        canvas.drawPath(mScaledRoamingInlinePath, mRoamingHaloPaint);
+        canvas.drawPath(mScaledRoamingInlinePath, mForegroundPaint);
     }
 
     private void drawDotAndPadding(float x, float y,
