@@ -99,6 +99,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManagerInternal;
 import android.content.pm.UserPackage;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.BatteryStatsInternal;
@@ -340,6 +341,33 @@ public class AlarmManagerService extends SystemService {
      * At boot we use SYSTEM_UI_SELF_PERMISSION to look up the definer's uid.
      */
     int mSystemUiUid;
+
+    /**
+     * RedMagic Control "Sleep harder when offline". While this Settings.Global switch is set and
+     * the device is in deep idle, every alarm from a non-core uid is held until the idle-until
+     * alarm, whether or not the app is on the power-save allowlist (GMS, which is why
+     * gms_scheduler kept waking the phone every few minutes with no network to talk to) or asked
+     * for allow-while-idle. Alarm clocks, SystemUI and core system uids are not touched. The
+     * switch is only ever set while there is no default network, so nothing is lost.
+     */
+    static final String OFFLINE_IDLE_HOLD_SETTING = "rm_alarm_offline_idle_hold";
+    @GuardedBy("mLock")
+    boolean mOfflineIdleHold;
+
+    @GuardedBy("mLock")
+    private void updateOfflineIdleHoldLocked() {
+        final boolean hold = Settings.Global.getInt(getContext().getContentResolver(),
+                OFFLINE_IDLE_HOLD_SETTING, 0) != 0;
+        if (hold == mOfflineIdleHold) {
+            return;
+        }
+        mOfflineIdleHold = hold;
+        Slog.i(TAG, "Offline idle hold " + (hold ? "on" : "off"));
+        if (mPendingIdleUntil != null) {
+            mAlarmStore.updateAlarmDeliveries(alarm -> adjustDeliveryTimeBasedOnDeviceIdle(alarm));
+            rescheduleKernelAlarmsLocked();
+        }
+    }
 
     private static boolean isTimeTickAlarm(Alarm a) {
         return a.uid == Process.SYSTEM_UID && TIME_TICK_TAG.equals(a.listenerTag);
@@ -2061,6 +2089,18 @@ public class AlarmManagerService extends SystemService {
             synchronized (mLock) {
                 mConstants.start();
 
+                getContext().getContentResolver().registerContentObserver(
+                        Settings.Global.getUriFor(OFFLINE_IDLE_HOLD_SETTING), false,
+                        new ContentObserver(mHandler) {
+                            @Override
+                            public void onChange(boolean selfChange) {
+                                synchronized (mLock) {
+                                    updateOfflineIdleHoldLocked();
+                                }
+                            }
+                        });
+                updateOfflineIdleHoldLocked();
+
                 mAppOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
 
                 mLocalDeviceIdleController =
@@ -2529,7 +2569,11 @@ public class AlarmManagerService extends SystemService {
         }
 
         final long deviceIdlePolicyTime;
-        if ((alarm.flags & (FLAG_ALLOW_WHILE_IDLE_UNRESTRICTED | FLAG_WAKE_FROM_IDLE)) != 0) {
+        if (mOfflineIdleHold && alarm.alarmClock == null && !UserHandle.isCore(alarm.creatorUid)
+                && !isSameApp(alarm.creatorUid, mSystemUiUid)) {
+            // Offline hold: nothing to deliver, wait for the maintenance window.
+            deviceIdlePolicyTime = mPendingIdleUntil.getWhenElapsed();
+        } else if ((alarm.flags & (FLAG_ALLOW_WHILE_IDLE_UNRESTRICTED | FLAG_WAKE_FROM_IDLE)) != 0) {
             // Unrestricted.
             deviceIdlePolicyTime = nowElapsed;
         } else if (isAllowedWhileIdleRestricted(alarm)) {
@@ -3362,6 +3406,7 @@ public class AlarmManagerService extends SystemService {
                 pw.println("Idle mode state:");
 
                 pw.increaseIndent();
+                pw.print("Offline idle hold: "); pw.println(mOfflineIdleHold);
                 pw.print("Idling until: ");
                 if (mPendingIdleUntil != null) {
                     pw.println(mPendingIdleUntil);
