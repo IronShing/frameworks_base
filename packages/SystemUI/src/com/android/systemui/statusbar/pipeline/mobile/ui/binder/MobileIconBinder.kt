@@ -71,6 +71,12 @@ object MobileIconBinder {
         val mobileHdView = view.requireViewById<ImageView>(R.id.mobile_hd)
         val mobileHdSpace = view.requireViewById<Space>(R.id.mobile_hd_space)
         val endSideRoamingView = view.requireViewById<ImageView>(R.id.mobile_roaming_updated)
+        // The end-side "R" is only shown when the SignalDrawable doesn't already draw the roaming
+        // glyph inside the bars (new status bar icons, plain roaming state).
+        var roamingVisible = false
+        fun updateEndSideRoaming() {
+            endSideRoamingView.isVisible = roamingVisible && !mobileDrawable.drawsInlineRoaming()
+        }
         val dotView = view.requireViewById<StatusBarIconView>(R.id.status_bar_dot)
 
         view.isVisible = viewModel.isVisible.value
@@ -162,6 +168,7 @@ object MobileIconBinder {
                                         )
                                     iconView.setImageDrawable(mobileDrawable)
                                     mobileDrawable.level = packedSignalDrawableState
+                                    updateEndSideRoaming()
                                     viewModel.verboseLogger?.logBinderSignalIconResult(
                                         parentView = view,
                                         subId = viewModel.subscriptionId,
@@ -241,7 +248,8 @@ object MobileIconBinder {
                     // Set the roaming indicator (single SIM - end side)
                     launch {
                         viewModel.isRoamingVisible.distinctUntilChanged().collect { isRoaming ->
-                            endSideRoamingView.isVisible = isRoaming
+                            roamingVisible = isRoaming
+                            updateEndSideRoaming()
                         }
                     }
 
