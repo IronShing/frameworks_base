@@ -3698,8 +3698,10 @@ public class InputManagerService extends IInputManager.Stub
             DisplayInfo displayInfo =
                     mDisplayManagerInternal.getDisplayInfo(displayId);
             // Explicit display association requires either the caller to own the display or if
-            // it's from the system.
-            if (callingUid != displayInfo.ownerUid && callingUid != Process.SYSTEM_UID
+            // it's from the system. Compare app ids: a system-shared-uid app running under a
+            // secondary user calls as u<N>_system (XDA #157, RedMagic Control touchpad).
+            if (callingUid != displayInfo.ownerUid
+                    && UserHandle.getAppId(callingUid) != Process.SYSTEM_UID
                     && callingUid != 0) {
                 throw new SecurityException(
                         "Explicit display association requires caller to own the display");
