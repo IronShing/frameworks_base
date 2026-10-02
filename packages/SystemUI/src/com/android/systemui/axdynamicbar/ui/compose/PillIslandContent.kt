@@ -1221,7 +1221,10 @@ internal fun PillEventText(
         is IslandEvent.RingerMode -> MarqueeLabel(event.label, overrideColor ?: eventStyleFor(event).accent, modifier)
         is IslandEvent.Vpn -> MarqueeLabel(stringResource(R.string.ax_dynamic_bar_vpn_active), overrideColor ?: IndigoAccent, modifier)
         is IslandEvent.Clipboard ->
-            MarqueeLabel(event.preview.ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, overrideColor ?: IndigoAccent, modifier)
+            // No marquee here: a status-bar chip for an image copy (screenshot auto-copy) was seen
+            // stuck in MarqueeModifierNode.measure (NX809J XDA #248/#277 ANR traces), so the
+            // clipboard text is a plain single-line label; long previews ellipsise.
+            StaticLabel(event.preview.ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, overrideColor ?: IndigoAccent, modifier)
         is IslandEvent.Call -> {
             if (event.callStartTimeMs > 0L) {
                 CallTimerText(event, modifier, overrideColor)
@@ -1309,6 +1312,18 @@ private fun aospShortDeltaText(deltaMs: Long): String {
         mins < 1440L -> stringResource(R.string.ax_dynamic_bar_hours_ago, (mins / 60L).toInt())
         else -> stringResource(R.string.ax_dynamic_bar_days_ago, (mins / 1440L).toInt())
     }
+}
+
+@Composable
+private fun StaticLabel(text: String, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        color = color,
+        style = PillPrimary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 @Composable
