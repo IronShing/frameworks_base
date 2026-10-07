@@ -34,6 +34,7 @@ import android.util.SparseIntArray
 import com.android.internal.annotations.VisibleForTesting
 import com.android.internal.util.IntPair
 import com.android.server.LocalServices
+import com.android.server.wm.WindowManagerInternal
 import com.android.server.appop.AppOpsCheckingServiceInterface
 import com.android.server.appop.AppOpsCheckingServiceInterface.AppOpsModeChangedListener
 import com.android.server.permission.access.AccessCheckingService
@@ -93,6 +94,12 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
     // userId -> packageName -> mask
     @Volatile private var privacyGuard = SparseArray<ArrayMap<String, Int>>()
     private val privacyGuardLock = Any()
+    // Touch-bound screen rules: Settings.Secure rm_privacy_touch = "pkg/activity:mask,...". While
+    // that activity is focused AND a finger is on the screen (hold-to-record buttons), the masked
+    // ops pass; the same op with no finger down stays guarded. No mode-change event is involved,
+    // so a recording that started under a finger keeps running after lift-off (WhatsApp's
+    // swipe-to-lock) until the app stops it. userId -> "pkg/cls" -> mask
+    @Volatile private var privacyTouch = SparseArray<ArrayMap<String, Int>>()
 
     @Volatile private var listeners = ArraySet<AppOpsModeChangedListener>()
     private val listenersLock = Any()
@@ -159,15 +166,14 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             else -> 0
         }
 
-    private fun readPrivacyGuard(userId: Int): ArrayMap<String, Int> {
+    private fun readPrivacyGuard(userId: Int): ArrayMap<String, Int> =
+        readRuleString(PRIVACY_GUARD_SETTING, userId)
+
+    private fun readRuleString(setting: String, userId: Int): ArrayMap<String, Int> {
         val out = ArrayMap<String, Int>()
         val raw =
             try {
-                Settings.Secure.getStringForUser(
-                    context.contentResolver,
-                    PRIVACY_GUARD_SETTING,
-                    userId,
-                )
+                Settings.Secure.getStringForUser(context.contentResolver, setting, userId)
             } catch (e: Exception) {
                 null
             }
@@ -199,6 +205,17 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             }
             privacyGuard = guard
         }
+        reloadPrivacyTouch()
+        context.contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor(PRIVACY_TOUCH_SETTING),
+            false,
+            object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean, uri: Uri?, userId: Int) {
+                    reloadPrivacyTouch()
+                }
+            },
+            UserHandle.USER_ALL,
+        )
         val observer =
             object : ContentObserver(handler) {
                 override fun onChange(selfChange: Boolean, uri: Uri?, userId: Int) {
@@ -217,6 +234,19 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
             observer,
             UserHandle.USER_ALL,
         )
+    }
+
+    /** Touch rules change nothing an app can observe, so no listener needs telling. */
+    private fun reloadPrivacyTouch() {
+        val touch = SparseArray<ArrayMap<String, Int>>()
+        for (userId in allUserIds()) {
+            val rules = readRuleString(PRIVACY_TOUCH_SETTING, userId)
+            if (rules.isNotEmpty()) {
+                touch.put(userId, rules)
+            }
+        }
+        privacyTouch = touch
+        Slog.i(LOG_TAG, "privacy touch rules: $touch")
     }
 
     private fun reloadPrivacyGuard(userId: Int) {
@@ -307,6 +337,20 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
         val packageNames = state.externalState.appIdPackageNames[appId] ?: return false
         if (!packageNames.anyIndexed { _, packageName -> ((rules[packageName] ?: 0) and bit) != 0 }) {
             return false
+        }
+        // Touch-bound screen rule: the focused activity has a finger on it right now.
+        val touch = privacyTouch[userId]
+        if (touch != null) {
+            val touched =
+                LocalServices.getService(WindowManagerInternal::class.java)
+                    ?.getTouchedActivity(PRIVACY_TOUCH_GRACE_MS)
+            if (
+                touched != null &&
+                    packageNames.contains(touched.packageName) &&
+                    ((touch[touched.packageName + "/" + touched.className] ?: 0) and bit) != 0
+            ) {
+                return false
+            }
         }
         // Android's own "Select photos" (partial access) is a stronger, user-chosen limit than the
         // guard: the app can only ever see the pictures the user picked. Guarding that op on top
@@ -798,6 +842,9 @@ class AppOpService(private val service: AccessCheckingService) : AppOpsCheckingS
 
     companion object {
         private const val PRIVACY_GUARD_SETTING = "rm_privacy_guard"
+        private const val PRIVACY_TOUCH_SETTING = "rm_privacy_touch"
+        /** A finger lifted this recently still counts as touching (tap-to-record latency). */
+        private const val PRIVACY_TOUCH_GRACE_MS = 700L
         private const val PRIVACY_GUARD_CAMERA = 1
         private const val PRIVACY_GUARD_MIC = 2
         private const val PRIVACY_GUARD_LOCATION = 4

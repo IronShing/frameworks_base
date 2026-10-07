@@ -28,13 +28,16 @@ import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.res.R
 import com.android.systemui.shade.ShadeDisplayAware
+import com.android.systemui.shared.settings.data.repository.SecureSettingsRepository
 import com.android.systemui.util.kotlin.emitOnStart
 import com.android.systemui.util.kotlin.mapDirect
 import javax.inject.Inject
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 
 @SysUISingleton
@@ -42,6 +45,7 @@ class QuickQuickSettingsRowRepository @Inject constructor(
     @Application private val context: Context,
     @ShadeDisplayAware private val resources: Resources,
     @ShadeDisplayAware private val configurationRepository: ConfigurationRepository,
+    secureSettingsRepository: SecureSettingsRepository,
 ) {
     private fun settingsChanges(): Flow<Unit> = callbackFlow {
         val uris: List<Uri> = listOf(
@@ -68,12 +72,29 @@ class QuickQuickSettingsRowRepository @Inject constructor(
         ).coerceAtLeast(1)
     }
 
-    val rows: Flow<Int> =
+    /** User-configured rows (Settings.System QQS_TILES_ROWS[_LANDSCAPE], EvoX 12.3). */
+    private val configRows: Flow<Int> =
         merge(configurationRepository.onConfigurationChange, settingsChanges())
             .emitOnStart()
             .mapDirect { readRows() }
             .distinctUntilChanged()
 
+    // NX809J: RedMagic Control sets this while an external display is connected, so the
+    // touchpad / display-off tiles it moves into the list get their own row in the collapsed
+    // shade instead of pushing the user's first tiles out (0-2 extra rows).
+    /** Extra rows requested by RedMagic Control (0 when no external display). */
+    val extraRows: Flow<Int> =
+        secureSettingsRepository.intSetting(EXTRA_ROWS_SETTING, 0).map { it.coerceIn(0, 2) }
+
+    val rows: Flow<Int> = combine(configRows, extraRows) { base, extra -> base + extra }
+
+    /** Rows the collapsed shade shows before the RedMagic Control pinned row. */
+    val baseRows: Flow<Int> = configRows
+
     val defaultRows: Int =
         resources.getInteger(R.integer.quick_qs_paginated_grid_num_rows)
+
+    private companion object {
+        const val EXTRA_ROWS_SETTING = "rm_qqs_extra_rows"
+    }
 }

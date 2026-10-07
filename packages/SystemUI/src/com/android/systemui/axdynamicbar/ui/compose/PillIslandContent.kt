@@ -1224,7 +1224,7 @@ internal fun PillEventText(
             // No marquee here: a status-bar chip for an image copy (screenshot auto-copy) was seen
             // stuck in MarqueeModifierNode.measure (NX809J XDA #248/#277 ANR traces), so the
             // clipboard text is a plain single-line label; long previews ellipsise.
-            StaticLabel(event.preview.ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, overrideColor ?: IndigoAccent, modifier)
+            StaticLabel(event.preview.forDisplay().ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, overrideColor ?: IndigoAccent, modifier)
         is IslandEvent.Call -> {
             if (event.callStartTimeMs > 0L) {
                 CallTimerText(event, modifier, overrideColor)

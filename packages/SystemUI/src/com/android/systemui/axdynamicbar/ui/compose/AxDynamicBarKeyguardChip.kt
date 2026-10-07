@@ -922,7 +922,7 @@ private fun KeyguardPrimaryText(event: IslandEvent, color: Color, modifier: Modi
         is IslandEvent.RingerMode -> MarqueeText(event.label, color, modifier)
         is IslandEvent.Vpn -> MarqueeText(stringResource(R.string.ax_dynamic_bar_vpn_active), color, modifier)
         is IslandEvent.Clipboard -> MarqueeText(
-            event.preview.ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, color, modifier,
+            event.preview.forDisplay().ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, color, modifier,
         )
         is IslandEvent.BiometricUnlock -> MarqueeText(stringResource(R.string.ax_dynamic_bar_unlocked), color, modifier)
         is IslandEvent.AppSwitch -> MarqueeText(stringResource(R.string.ax_dynamic_bar_recents), color, modifier)

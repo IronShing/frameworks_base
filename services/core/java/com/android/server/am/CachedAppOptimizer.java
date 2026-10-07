@@ -310,7 +310,10 @@ public class CachedAppOptimizer {
     @VisibleForTesting static final boolean ENABLE_SHARED_AND_CODE_COMPACT = false;
 
     // Defaults for phenotype flags.
-    @VisibleForTesting static final boolean DEFAULT_USE_COMPACTION = true;
+    // NX809J: off. The 6.12.38-OP-WILD kernel takes an SME fault in memcmp while splitting a THP
+    // under process_madvise(MADV_PAGEOUT) (remove_migration_pte) and panics -- seen as the "ZTE
+    // memory dump" minutes after the first boot of every freshly flashed super (2026-10-04/06).
+    @VisibleForTesting static final boolean DEFAULT_USE_COMPACTION = false;
     @VisibleForTesting static final boolean DEFAULT_USE_FREEZER = true;
     @VisibleForTesting static final long DEFAULT_COMPACT_THROTTLE_1 = 5_000;
     @VisibleForTesting static final long DEFAULT_COMPACT_THROTTLE_2 = 10_000;

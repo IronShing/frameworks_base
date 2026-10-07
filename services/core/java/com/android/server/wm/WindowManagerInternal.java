@@ -883,6 +883,13 @@ public abstract class WindowManagerInternal {
     public abstract int getTopFocusedDisplayId();
 
     /**
+     * NX809J privacy guard: the focused activity while a finger is on its display (a pointer is
+     * down, or lifted less than graceMs ago), else null. Lock-free heuristic for touch-bound
+     * allowances; never blocks on the window manager lock.
+     */
+    public abstract android.content.ComponentName getTouchedActivity(long graceMs);
+
+    /**
      * @return The UI context of top focused display.
      */
     public abstract Context getTopFocusedDisplayUiContext();
