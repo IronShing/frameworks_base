@@ -280,7 +280,12 @@ public class TileServices extends IQSService.Stub {
         if (customTile != null) {
             verifyCaller(customTile);
             customTile.onDialogShown();
-            mPanelInteractor.forceCollapsePanels();
+            // NX809J: RedMagic Control's Audio output picker is shown with showDialog() over the
+            // open shade (like the media output dialog) and must NOT collapse it -- the point is to
+            // switch output and stay in the shade (user request 2026-10-04). Other tiles collapse.
+            if (!"com.nubia.rmcontrol".equals(customTile.getComponent().getPackageName())) {
+                mPanelInteractor.forceCollapsePanels();
+            }
             Objects.requireNonNull(mServices.get(customTile)).setShowingDialog(true);
         }
     }

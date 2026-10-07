@@ -630,6 +630,11 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
      */
     ActivityRecord mFocusedApp = null;
 
+    /** NX809J privacy guard: uptime of the last touch DOWN on this display, and of the last
+     *  UP/CANCEL (0 while a pointer is down). Lock-free; read through WindowManagerInternal. */
+    volatile long mTouchDownUptime;
+    volatile long mTouchUpUptime;
+
     /**
      * We only respect the orientation request from apps below this {@link TaskDisplayArea}.
      * It is the last focused {@link TaskDisplayArea} on this display that handles orientation
@@ -1318,6 +1323,21 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
             registerPointerEventListener(
                     mWmService.mAtmService.getRecentTasks().getInputListener());
         }
+        // NX809J privacy guard: remember whether a finger is on this display, so a touch-bound
+        // allowance (hold-to-record buttons) can tell a press from a silent sensor grab.
+        registerPointerEventListener(event -> {
+            if (!event.isTouchEvent()) return;
+            switch (event.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    mTouchDownUptime = event.getEventTime();
+                    mTouchUpUptime = 0;
+                    break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    mTouchUpUptime = android.os.SystemClock.uptimeMillis();
+                    break;
+            }
+        });
 
         mDeviceStateController = deviceStateController;
 

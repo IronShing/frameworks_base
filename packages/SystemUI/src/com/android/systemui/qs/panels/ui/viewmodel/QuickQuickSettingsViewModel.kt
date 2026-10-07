@@ -73,10 +73,36 @@ constructor(
 
     private val currentTiles by tilesInteractor.currentTiles.hydratedStateOf()
 
+    private val baseRows by
+        quickQuickSettingsRowInteractor.baseRows.hydratedStateOf(
+            initialValue = quickQuickSettingsRowInteractor.defaultRows
+        )
+
+    private val extraRows by quickQuickSettingsRowInteractor.extraRows.hydratedStateOf(0)
+
     val tileViewModels by derivedStateOf {
-        currentTiles
-            .map { SizedTileImpl(TileViewModel(it.tile, it.spec, it.expandable), it.spec.width()) }
-            .let { splitInRowsSequence(it, columns).take(rows).toList().flatten() }
+        val sized =
+            currentTiles.map {
+                SizedTileImpl(TileViewModel(it.tile, it.spec, it.expandable), it.spec.width())
+            }
+        // NX809J: while an external display is connected RedMagic Control asks for an extra row
+        // and the touchpad / display-off tiles fill it, right under the user's first rows. Done
+        // here, for the collapsed view only: SystemUI owns sysui_qs_tiles and reverts outside
+        // edits, and the user's own tile order must not change anyway.
+        val pinned =
+            if (extraRows > 0) sized.filter { it.tile.spec.isExtDisplayTile() } else emptyList()
+        if (pinned.isEmpty()) {
+            splitInRowsSequence(sized, columns).take(rows).toList().flatten()
+        } else {
+            // Pinned tiles start the first extra row; whatever space they leave is filled with
+            // the user's next tiles (e.g. a wide Audio output tile) instead of staying empty.
+            val rest = sized.filterNot { it in pinned }
+            val mediaFactor = if (rows > rowsWithoutMedia) 2 else 1
+            val head =
+                splitInRowsSequence(rest, columns).take(baseRows * mediaFactor).toList().flatten()
+            val ordered = head + pinned + rest.drop(head.size)
+            splitInRowsSequence(ordered, columns).take(rows).toList().flatten()
+        }
     }
 
     override suspend fun onActivated() {
@@ -94,6 +120,13 @@ constructor(
     private fun TileSpec.width(): Int = if (largeTiles.contains(this)) largeTilesSpan else 1
 
     companion object {
+        /** RedMagic Control's touchpad and display-off tiles, matched by component. */
+        private fun TileSpec.isExtDisplayTile(): Boolean {
+            val cn = (this as? TileSpec.CustomTileSpec)?.componentName ?: return false
+            return cn.packageName == "com.nubia.rmcontrol" &&
+                (cn.className.endsWith(".TouchpadTile") || cn.className.endsWith(".MonitorOnlyTile"))
+        }
+
         /** Behavior of the media carousel in quick quick settings */
         @VisibleForTesting
         val mediaUiBehavior: MediaUiBehavior

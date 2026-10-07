@@ -8452,6 +8452,9 @@ public class WindowManagerService extends IWindowManager.Stub
         mPolicy.registerShortcutKey(shortcutCode, shortcutKeyReceiver);
     }
 
+    /** A pointer "down" without an UP for longer than this is treated as not touching. */
+    private static final long TOUCHED_MAX_HOLD_MS = 120_000L;
+
     private final class LocalService extends WindowManagerInternal {
 
         @Override
@@ -9201,6 +9204,26 @@ public class WindowManagerService extends IWindowManager.Stub
             synchronized (mGlobalLock) {
                 return mRoot.getTopFocusedDisplayContent().getDisplayId();
             }
+        }
+
+        @Override
+        public ComponentName getTouchedActivity(long graceMs) {
+            // No lock: a stale read costs one wrong allow/deny of a guarded sensor op at most.
+            // The caller may hold the app-ops lock, so never wait for mGlobalLock here.
+            final DisplayContent dc;
+            try {
+                dc = mRoot.getTopFocusedDisplayContent();
+            } catch (RuntimeException e) {
+                return null;                  // display list changing under us: treat as untouched
+            }
+            if (dc == null) return null;
+            final long down = dc.mTouchDownUptime;
+            if (down == 0) return null;
+            final long now = SystemClock.uptimeMillis();
+            final long up = dc.mTouchUpUptime;
+            if (up != 0 ? now - up > graceMs : now - down > TOUCHED_MAX_HOLD_MS) return null;
+            final ActivityRecord app = dc.mFocusedApp;
+            return app != null ? app.mActivityComponent : null;
         }
 
         @Override

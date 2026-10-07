@@ -51,6 +51,16 @@ import com.android.systemui.axdynamicbar.shared.IslandActions
 import com.android.systemui.axdynamicbar.shared.*
 import com.android.systemui.res.R
 
+/**
+ * Text layout measures the whole string before it ellipsizes, on the main thread: a multi-megabyte
+ * clip (or one kept in the stash) froze SystemUI as soon as the panel opened. Only the first few
+ * lines are ever shown, so lay out no more than that; copy actions still use the full text.
+ */
+private const val MAX_DISPLAY_CHARS = 400
+
+internal fun String.forDisplay(): String =
+    if (length <= MAX_DISPLAY_CHARS) this else substring(0, MAX_DISPLAY_CHARS)
+
 @Composable
 internal fun ClipboardExpanded(event: IslandEvent.Clipboard, interactor: IslandActions) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SpaceLg)) {
@@ -160,7 +170,7 @@ private fun ClipboardStashItem(
                 )
                 if (item.preview.isNotEmpty()) {
                     Text(
-                        item.preview,
+                        item.preview.forDisplay(),
                         color = SubtleGray,
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
@@ -169,7 +179,7 @@ private fun ClipboardStashItem(
                 }
             } else {
                 Text(
-                    item.preview,
+                    item.preview.forDisplay(),
                     color = OnCardText,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
@@ -220,7 +230,7 @@ private fun ClipboardSingleItem(event: IslandEvent.Clipboard, interactor: Island
                 }
             }
             Text(
-                event.preview,
+                event.preview.forDisplay(),
                 color = OnCardText,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 4,
@@ -271,7 +281,7 @@ internal fun RowScope.CompactClipboardRow(
     }
     Spacer(Modifier.width(SpaceLg))
     Text(
-        event.preview.ifEmpty { stringResource(if (event.isImage) R.string.ax_dynamic_bar_image_copied else R.string.ax_dynamic_bar_copied) },
+        event.preview.forDisplay().ifEmpty { stringResource(if (event.isImage) R.string.ax_dynamic_bar_image_copied else R.string.ax_dynamic_bar_copied) },
         color = OnCardText,
         style = MaterialTheme.typography.bodySmall,
         maxLines = 1,

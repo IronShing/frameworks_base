@@ -28,7 +28,7 @@ import java.util.Set;
 public final class PixelDeviceRepository {
 
     private static final String TAG = "PixelDeviceRepository";
-    public static final String CACHE_KEY = "pi_pixel_device_cache";
+    public static final String CACHE_KEY = "pi_pixel_device_cache_v2_stable";
     public static final String STABLE_CACHE_KEY = "pi_pixel_stable_device_cache";
     private static final int CACHE_VERSION = 2;
     private static final String GOOGLE_URL = "https://developer.android.com";
@@ -305,7 +305,13 @@ public final class PixelDeviceRepository {
 
             List<PixelProfile> fresh = Collections.emptyList();
             try {
-                fresh = fetchFromNetwork();
+                // 2026-10-05: switched from fetchFromNetwork() (canary-first). Google no longer
+                // certifies canary/beta builds, so a "<device>_beta:CANARY/..." fingerprint fails
+                // Play Integrity outright (BASIC + DEVICE + STRONG all red; XDA #306/#312 and
+                // measured on the daily). Stable release fingerprints pass BASIC + DEVICE, which
+                // is the ceiling on an unlocked device. Cache key bumped so stale canary cache is
+                // dropped; FALLBACK_PROFILES (hardcoded stable) covers the no-network case.
+                fresh = fetchAllStableProfilesFromNetwork();
             } catch (Exception e) {
                 Log.w(TAG, "Network fetch failed: " + e.getMessage());
             }
