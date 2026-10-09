@@ -193,9 +193,9 @@ public final class PixelDeviceRepository {
      * is in [available], otherwise the newest ranked phone per GENERATION_ORDER.
      */
     public static String getDefaultPifCodename(List<PixelProfile> available) {
-        for (PixelProfile p : available) {
-            if (PIF_DEFAULT_CODENAME.equals(p.codename)) return PIF_DEFAULT_CODENAME;
-        }
+        // NX809J: no canary default. Google stopped certifying canary/beta prints (XDA #306/
+        // #312, 2026-10-05), so Play Integrity keeps the newest stable phone print, the same
+        // one the Pixel props spoof uses.
         return getDefaultPhoneCodename(available);
     }
 
@@ -270,9 +270,6 @@ public final class PixelDeviceRepository {
         f.add(new PixelProfile("tangorpro", "Pixel Tablet",      "google", "tangorpro", "tangorpro",
                 "google/tangorpro/tangorpro:17/CP3A.261005.002.A1/16269273:user/release-keys",
                 "CP3A.261005.002.A1", "2026-10-05", 0L, null, false));
-        f.add(new PixelProfile("bluejay",   "Pixel 6a",          "google", "bluejay",   "bluejay_beta",
-                "google/bluejay_beta/bluejay:CANARY/ZP11.260918.007/16484274:user/release-keys",
-                "ZP11.260918.007", "2026-10-05", 0L, null, true));
         FALLBACK_PROFILES = Collections.unmodifiableList(f);
     }
 
