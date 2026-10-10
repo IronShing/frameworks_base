@@ -7431,6 +7431,14 @@ public class AudioService extends IAudioService.Stub
         }
     }
 
+    private static boolean isCallModeHandler(SetModeDeathHandler h) {
+        final int mode = h.getMode();
+        return mode == AudioSystem.MODE_IN_CALL
+                || mode == AudioSystem.MODE_IN_COMMUNICATION
+                || mode == AudioSystem.MODE_CALL_REDIRECT
+                || mode == AudioSystem.MODE_COMMUNICATION_REDIRECT;
+    }
+
     @GuardedBy("mDeviceBroker.mSetModeLock")
     private SetModeDeathHandler getAudioModeOwnerHandler() {
         // The Audio mode owner is:
@@ -7449,8 +7457,15 @@ public class AudioService extends IAudioService.Stub
                         privilegedModeOwner = h;
                     }
                 } else {
+                    // NX809J: an app in a call keeps the mode against newer non-call requests,
+                    // e.g. a background app's MODE_RINGTONE. Otherwise "most recent wins" drops a
+                    // VoIP call out of call audio mid-call: playback falls back to A2DP and the
+                    // headset mic (SCO) goes silent (WhatsApp vs Keeta, 2026-10-10).
+                    final boolean inCall = isCallModeHandler(h);
                     if (modeOwner == null
-                            || h.getUpdateTime() > modeOwner.getUpdateTime()) {
+                            || (inCall && !isCallModeHandler(modeOwner))
+                            || (inCall == isCallModeHandler(modeOwner)
+                                    && h.getUpdateTime() > modeOwner.getUpdateTime())) {
                         modeOwner = h;
                     }
                 }
